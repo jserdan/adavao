@@ -495,7 +495,7 @@ class DispatchController extends Controller
     private function fetchPushTokenFromBackend($officerId)
     {
         try {
-            $baseUrl = rtrim(env('NODE_BACKEND_URL', 'https://userside-node-server.onrender.com'), '/');
+            $baseUrl = rtrim(env('NODE_BACKEND_URL', 'https://adavao-1-mawm.onrender.com'), '/');
             $url = $baseUrl . '/api/user/push-token/' . $officerId;
 
             $headers = [
@@ -530,7 +530,7 @@ class DispatchController extends Controller
     private function syncDispatchToUserSide($reportId, $dispatcherId = null, $notes = null, $patrolOfficerId = null)
     {
         try {
-            $baseUrl = rtrim(env('NODE_BACKEND_URL', 'https://userside-node-server.onrender.com'), '/');
+            $baseUrl = rtrim(env('NODE_BACKEND_URL', 'https://adavao-1-mawm.onrender.com'), '/');
             $url = $baseUrl . '/api/dispatch/admin-sync';
 
             $headers = [
