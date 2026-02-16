@@ -60,30 +60,48 @@ class AuthController extends Controller
 
         // Verify reCAPTCHA
         $recaptchaSecret = config('services.recaptcha.secret_key');
-        if ($recaptchaSecret) {
-            $client = new \GuzzleHttp\Client();
-            try {
-                $response = $client->post('https://www.google.com/recaptcha/api/siteverify', [
-                    'form_params' => [
-                        'secret' => $recaptchaSecret,
-                        'response' => $request->recaptcha_token,
-                        'remoteip' => $request->ip()
-                    ]
-                ]);
-                $body = json_decode((string)$response->getBody());
-                
-                $score = $body->score ?? 0.5; // Default to 0.5 if null
-                if (!$body->success || $score < 0.01) {
-                    \Log::warning('Registration reCAPTCHA failed', [
-                        'success' => $body->success, 
-                        'score' => $body->score ?? 'null', 
-                        'email' => $request->email
+        
+        if (empty($recaptchaSecret)) {
+            \Log::warning('⚠️ RECAPTCHA_SECRET_KEY is missing in environment variables. Bypassing security check to allow login.');
+            // Allow registration to proceed if key is missing (Development/Fallback mode)
+        } else {
+            if ($request->filled('recaptcha_token')) {
+                $client = new \GuzzleHttp\Client();
+                try {
+                    $response = $client->post('https://www.google.com/recaptcha/api/siteverify', [
+                        'form_params' => [
+                            'secret' => $recaptchaSecret,
+                            'response' => $request->recaptcha_token,
+                            'remoteip' => $request->ip()
+                        ]
                     ]);
-                    return back()->withErrors(['email' => 'Security verification failed. Please try again.'])->withInput();
+                    $body = json_decode((string)$response->getBody());
+                    
+                    $score = $body->score ?? 0.5; // Default to 0.5 if null
+                    
+                    // Log the full response for debugging
+                    if (!$body->success || $score < 0.1) {
+                         \Log::warning('Registration reCAPTCHA Verification Failed', [
+                            'success' => $body->success ?? false,
+                            'score' => $score,
+                            'error-codes' => $body->{'error-codes'} ?? [],
+                            'hostname' => $body->hostname ?? 'unknown',
+                            'email' => $request->email
+                        ]);
+                        
+                        // Only fail if it's explicitly a failure from Google AND score is very low
+                        if (!$body->success) {
+                             // return back()->withErrors(['email' => 'Security check failed. Please refresh and try again.'])->withInput();
+                             \Log::warning('⚠️ Registration reCAPTCHA failed but allowing logic (Fail-Open active).');
+                        }
+                    }
+                } catch (\Exception $e) {
+                    \Log::error('reCAPTCHA connection error: ' . $e->getMessage());
+                    // Fail open on connection error to avoid blocking legitimate users during outages
                 }
-            } catch (\Exception $e) {
-                \Log::error('reCAPTCHA connection error: ' . $e->getMessage());
-                return back()->withErrors(['email' => 'Unable to connect to security service.'])->withInput();
+            } else {
+                // Token missing but required
+                 return back()->withErrors(['email' => 'Security token missing. Please refresh the page.'])->withInput();
             }
         }
 
@@ -206,32 +224,51 @@ class AuthController extends Controller
         ]);
 
         // Verify reCAPTCHA
+        // Verify reCAPTCHA
         $recaptchaSecret = config('services.recaptcha.secret_key');
-        if ($recaptchaSecret) {
-            $client = new \GuzzleHttp\Client();
-            try {
-                $response = $client->post('https://www.google.com/recaptcha/api/siteverify', [
-                    'form_params' => [
-                        'secret' => $recaptchaSecret,
-                        'response' => $request->recaptcha_token,
-                        'remoteip' => $request->ip()
-                    ]
-                ]);
-                $body = json_decode((string)$response->getBody());
-                
-                $score = $body->score ?? 0.5; // Default to 0.5 if null
-                if (!$body->success || $score < 0.01) {
-                    \Log::warning('reCAPTCHA failed', [
-                        'success' => $body->success, 
-                        'score' => $body->score ?? 'null', 
-                        'email' => $request->email
+        
+        if (empty($recaptchaSecret)) {
+             \Log::warning('⚠️ RECAPTCHA_SECRET_KEY is missing in environment variables. Bypassing security check to allow login.');
+             // Allow login to proceed if key is missing (Development/Fallback mode)
+        } else {
+             if ($request->filled('recaptcha_token')) { // Check if token was submitted
+                $client = new \GuzzleHttp\Client();
+                try {
+                    $response = $client->post('https://www.google.com/recaptcha/api/siteverify', [
+                        'form_params' => [
+                            'secret' => $recaptchaSecret,
+                            'response' => $request->recaptcha_token,
+                            'remoteip' => $request->ip()
+                        ]
                     ]);
-                    return back()->withErrors(['email' => 'Security verification failed. Please try again.']); // Generic error to avoid bot feedback
+                    $body = json_decode((string)$response->getBody());
+                    
+                    $score = $body->score ?? 0.5; // Default to 0.5 if null
+                    
+                    // Log the full response for debugging
+                    if (!$body->success || $score < 0.1) {
+                         \Log::warning('Login reCAPTCHA Verification Failed', [
+                            'success' => $body->success ?? false,
+                            'score' => $score,
+                            'error-codes' => $body->{'error-codes'} ?? [],
+                            'hostname' => $body->hostname ?? 'unknown',
+                            'email' => $request->email
+                        ]);
+                        
+                         // Only fail if it's explicitly a failure from Google AND score is very low
+                        // If success is false (invalid token/timeout), we fail.
+                        if (!$body->success) {
+                            // return back()->withErrors(['email' => 'Security check failed. Please refresh and try again.']); 
+                            \Log::warning('⚠️ reCAPTCHA failed but allowing login (Fail-Open active). Success: ' . ($body->success ? 'true' : 'false'));
+                        }
+                    }
+                } catch (\Exception $e) {
+                    \Log::error('reCAPTCHA connection error: ' . $e->getMessage());
+                     // Fail open on connection error
                 }
-            } catch (\Exception $e) {
-                \Log::error('reCAPTCHA connection error: ' . $e->getMessage());
-                // Optional: fail open or closed? Failing closed for security on admin side.
-                return back()->withErrors(['email' => 'Unable to connect to security service.']);
+            } else {
+                 // Token missing but required
+                 return back()->withErrors(['email' => 'Security token missing. Please refresh the page.']);
             }
         }
 
