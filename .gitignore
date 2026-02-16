@@ -66,3 +66,5 @@ AdminSide/admin/public/uploads/*
 
 secrets_backup.txt
 
+
+gradle_cache/
