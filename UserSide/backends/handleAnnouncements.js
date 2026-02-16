@@ -2,7 +2,7 @@ const db = require('./db');
 const { uploadFile, isConfigured } = require('./cloudinaryService');
 
 // Admin site base URL for storage assets (announcements, etc.)
-const ADMIN_BASE_URL = process.env.ADMIN_KEEP_ALIVE_URL || 'https://adminside-ngue.onrender.com';
+const ADMIN_BASE_URL = process.env.ADMIN_KEEP_ALIVE_URL || 'https://adavao-r8zo.onrender.com';
 
 /**
  * Convert relative attachment paths to full URLs
@@ -27,7 +27,7 @@ function resolveAttachmentUrls(attachments) {
 async function getAnnouncements(req, res) {
     try {
         const limit = parseInt(req.query.limit) || 10;
-        
+
         const [rows] = await db.query(
             `SELECT 
                 a.id,
@@ -79,7 +79,7 @@ async function getAnnouncements(req, res) {
 async function getAnnouncementById(req, res) {
     try {
         const { id } = req.params;
-        
+
         const [rows] = await db.query(
             `SELECT 
                 a.id,
@@ -137,7 +137,7 @@ function formatDate(dateString) {
     const now = new Date();
     const diffTime = Math.abs(now - date);
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-    
+
     if (diffDays === 0) {
         return 'Today';
     } else if (diffDays === 1) {
@@ -145,8 +145,8 @@ function formatDate(dateString) {
     } else if (diffDays < 7) {
         return `${diffDays} days ago`;
     } else {
-        return date.toLocaleDateString('en-US', { 
-            month: 'short', 
+        return date.toLocaleDateString('en-US', {
+            month: 'short',
             day: 'numeric',
             year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
         });

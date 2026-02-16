@@ -56,8 +56,8 @@
       "googleWebClientId": "662961186057-3ski6ooemfi1j19k6b5nh6o648kk6pdp.apps.googleusercontent.com",
       "googleAndroidClientId": "662961186057-mtki3cdvn002ndjho7soa6bdl0effe5b.apps.googleusercontent.com",
       "recaptchaSiteKey": "6Ld87BYsAAAAAK5Fu2BfDrKfWk0EoDt23yuyF2Zr",
-      "recaptchaBaseUrl": "https://userside-node-server.onrender.com",
-"apiBaseUrl": "https://userside-node-server.onrender.com",
+      "recaptchaBaseUrl": "https://adavao-1-mawm.onrender.com",
+      "apiBaseUrl": "https://adavao-1-mawm.onrender.com",
       "router": {},
       "eas": {
         "projectId": "c8a44159-9039-49f2-abec-c046849b3883"
