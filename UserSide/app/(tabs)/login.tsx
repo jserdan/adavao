@@ -135,7 +135,7 @@ const Login = () => {
     });
 
     // Warm up the server to prevent cold start delays on login
-    fetch(`${BACKEND_URL}/health`, { method: 'GET' }).catch(() => {});
+    fetch(`${BACKEND_URL}/health`, { method: 'GET' }).catch(() => { });
   }, []);
 
   useEffect(() => {
@@ -168,13 +168,13 @@ const Login = () => {
       // Fetch Google user info with shorter timeout
       console.log('⏱️ [Google] Starting user info fetch...');
       const userInfoPromise = getGoogleUserInfo(accessToken);
-      const timeoutPromise = new Promise((_, reject) => 
+      const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('Google user info timeout')), 8000)
       );
-      
+
       const userInfo = await Promise.race([userInfoPromise, timeoutPromise]) as any;
       console.log(`⏱️ [Google] User info fetch took ${Date.now() - startTime}ms`);
-      
+
       if (!userInfo || !userInfo.email) {
         Alert.alert('Error', 'Failed to get user information from Google');
         setIsLoading(false);
@@ -493,7 +493,18 @@ const Login = () => {
       });
       clearTimeout(timeoutId);
 
-      const data = await response.json();
+      const contentType = response.headers.get('content-type') || '';
+      let data: any;
+      if (contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        // Server returned non-JSON (e.g., HTML error page from a proxy)
+        const text = await response.text();
+        console.error('Non-JSON response from server:', text.substring(0, 200));
+        Alert.alert('Server Error', 'The server returned an unexpected response. Please try again.');
+        setIsLoading(false);
+        return;
+      }
 
       if (response.ok) {
         const user = data.user || data;

@@ -18,9 +18,10 @@
       }
     },
     "production": {
+      "distribution": "internal",
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_API_BASE_URL": "https://adavao-1-mawm.onrender.com"
+        "EXPO_PUBLIC_API_BASE_URL": "https://node-server-gk1u.onrender.com"
       },
       "android": {
         "buildType": "apk"

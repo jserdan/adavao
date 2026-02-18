@@ -10,7 +10,9 @@ import { findWorkingBackendUrl } from '../utils/networkUtils';
  */
 
 // Check if we have a production API URL configured
-const PRODUCTION_API_URL = Constants.expoConfig?.extra?.apiBaseUrl;
+// Priority: EXPO_PUBLIC env var (set by eas.json) > app.json extra > hardcoded fallback
+const EXPO_PUBLIC_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
+const PRODUCTION_API_URL = EXPO_PUBLIC_URL || Constants.expoConfig?.extra?.apiBaseUrl;
 
 /**
  * Get the backend URL synchronously
@@ -23,7 +25,7 @@ function getBackendUrl(): string {
   }
 
   // Default to Render URL for APK builds
-  return 'https://adavao-1-mawm.onrender.com';
+  return 'https://node-server-gk1u.onrender.com';
 }
 
 export const BACKEND_URL = getBackendUrl();
@@ -47,6 +49,9 @@ if (!PRODUCTION_API_URL || PRODUCTION_API_URL === 'https://YOUR_NGROK_BACKEND_UR
     console.warn('⚠️ Could not auto-detect backend:', err);
   });
 }
+
+console.log(`   EXPO_PUBLIC_API_BASE_URL: ${EXPO_PUBLIC_URL || '(not set)'}`);
+console.log(`   Resolved BACKEND_URL: ${BACKEND_URL}`);
 
 /**
  * Get the auto-detected backend URL (async)
