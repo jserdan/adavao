@@ -25,7 +25,7 @@ function getBackendUrl(): string {
   }
 
   // Default to Render URL for APK builds
-  return 'https://node-server-gk1u.onrender.com';
+  return 'https://adavao-1-mawm.onrender.com';
 }
 
 export const BACKEND_URL = getBackendUrl();
