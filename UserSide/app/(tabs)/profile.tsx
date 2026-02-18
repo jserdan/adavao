@@ -530,9 +530,16 @@ export default function ProfileScreen() {
                   {wasRejected && (
                     <View style={profileStyles.rejectedBanner}>
                       <Ionicons name="close-circle" size={20} color={COLORS.accent} />
-                      <Text style={profileStyles.rejectedText}>
-                        Your previous request was rejected. Please upload new documents.
-                      </Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={profileStyles.rejectedText}>
+                          Your previous request was rejected. Please upload new documents.
+                        </Text>
+                        {verificationStatus?.rejection_reason ? (
+                          <Text style={[profileStyles.rejectedText, { marginTop: 4, fontStyle: 'italic', opacity: 0.85 }]}>
+                            Reason: {verificationStatus.rejection_reason}
+                          </Text>
+                        ) : null}
+                      </View>
                     </View>
                   )}
 

@@ -11,7 +11,8 @@ import {
   Dimensions,
   StyleSheet,
   TouchableOpacity,
-  Modal
+  Modal,
+  BackHandler
 } from "react-native";
 import Checkbox from 'expo-checkbox';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -87,11 +88,23 @@ const Login = () => {
 
       // Clear password 
       setPassword("");
-      // setCaptchaValid(false);
-      // Ensure captcha is closed if validation expired
-      // recaptchaRef.current?.close();
 
-      return () => { };
+      // Handle Android back button on login screen — show exit confirmation
+      const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+        Alert.alert(
+          'Exit App',
+          'Are you sure you want to exit AlertDavao?',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Exit', style: 'destructive', onPress: () => BackHandler.exitApp() },
+          ]
+        );
+        return true; // Prevent default back action
+      });
+
+      return () => {
+        backHandler.remove();
+      };
     }, [])
   );
 

@@ -18,6 +18,7 @@ export interface VerificationStatus {
   id_selfie?: string;
   billing_document?: string;
   is_verified: boolean;
+  rejection_reason?: string;
   created_at: string;
   updated_at: string;
 }
@@ -57,7 +58,7 @@ class VerificationService {
     try {
       console.log(`🔍 Fetching verification status for user ID: ${userId}`);
       console.log(`🔗 API URL: ${this.apiUrl}/verification/status/${userId}`);
-      
+
       const response = await fetch(`${this.apiUrl}/verification/status/${userId}`, {
         method: 'GET',
         headers: {
@@ -66,7 +67,7 @@ class VerificationService {
       });
 
       console.log(`📊 Verification status response status: ${response.status}`);
-      
+
       if (!response.ok) {
         console.error(`❌ Failed to fetch verification status: ${response.status} ${response.statusText}`);
         throw new Error(`Failed to fetch verification status: ${response.status}`);
@@ -74,7 +75,7 @@ class VerificationService {
 
       const result = await response.json();
       console.log('✅ Verification status response:', JSON.stringify(result, null, 2));
-      
+
       // Ensure status is properly formatted
       if (result.success && result.data) {
         // Normalize status to only allowed values
@@ -83,7 +84,7 @@ class VerificationService {
           result.data.status = result.data.is_verified ? 'verified' : 'not verified';
         }
       }
-      
+
       return result;
     } catch (error) {
       console.error('💥 Error fetching verification status:', error);
