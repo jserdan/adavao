@@ -29,28 +29,17 @@ function emitRefresh() {
   });
 }
 
-// ---------- SSE + polling connection ----------
+import { io, Socket } from 'socket.io-client';
 
-function getEventSourceImpl() {
-  if (typeof EventSource !== 'undefined') return EventSource;
-  try {
-    const mod = require('react-native-sse');
-    return mod?.default || mod;
-  } catch {
-    return null;
-  }
-}
+// ---------- Socket.io connection ----------
 
 export function createSseConnection(onUpdate?: UpdateHandler): SseHandle {
-  const url = `${API_URL}/stream`;
-  const EventSourceImpl = getEventSourceImpl();
-  let source: any = null;
+  const url = API_URL;
+  let socket: Socket | null = null;
   let closed = false;
-  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-  let fallbackTimer: ReturnType<typeof setInterval> | null = null;
   let appStateSubscription: any = null;
   let lastEmit = 0;
-  const THROTTLE_MS = 2000;
+  const THROTTLE_MS = 1000;
 
   const notify = () => {
     const now = Date.now();
@@ -61,64 +50,34 @@ export function createSseConnection(onUpdate?: UpdateHandler): SseHandle {
   };
 
   const cleanup = () => {
-    if (source) {
-      try { source.close(); } catch { /* ignore */ }
-      source = null;
+    if (socket) {
+      socket.disconnect();
+      socket = null;
     }
-    if (reconnectTimer) {
-      clearTimeout(reconnectTimer);
-      reconnectTimer = null;
-    }
-    if (fallbackTimer) {
-      clearInterval(fallbackTimer);
-      fallbackTimer = null;
-    }
-  };
-
-  const scheduleReconnect = () => {
-    if (closed) return;
-    if (reconnectTimer) return;
-    reconnectTimer = setTimeout(() => {
-      reconnectTimer = null;
-      connect();
-    }, 5000);
   };
 
   const connect = () => {
     if (closed) return;
-    cleanup();
+    if (socket) return; // already connected or connecting
 
-    if (!EventSourceImpl) {
-      // Fallback to polling if SSE is not available
-      fallbackTimer = setInterval(() => {
-        if (!closed) notify();
-      }, 10000);
-      return;
-    }
+    // Extract base URL from API_URL (remove any /api path if present, though socket.io handles paths)
+    // Actually API_URL is used directly
+    socket = io(url, {
+      transports: ['websocket', 'polling'], // Allow fallback to polling if websockets fail
+      reconnectionDelayMax: 5000,
+    });
 
-    try {
-      source = new EventSourceImpl(url);
-      if (source?.addEventListener) {
-        source.addEventListener('update', () => notify());
-        // Don't fire on every tick - tick is just a keep-alive
-      } else if (source?.onmessage !== undefined) {
-        source.onmessage = () => notify();
-      }
-
-      source.onerror = () => {
-        if (closed) return;
-        scheduleReconnect();
-      };
-    } catch {
-      scheduleReconnect();
-    }
+    socket.on('update', () => {
+      if (!closed) notify();
+    });
   };
 
   // Reconnect when app comes to foreground
   appStateSubscription = AppState.addEventListener('change', (state: AppStateStatus) => {
     if (closed) return;
     if (state === 'active') {
-      if (!source || (source.readyState && source.readyState === 2)) {
+      if (!socket || !socket.connected) {
+        cleanup();
         connect();
       }
       notify();

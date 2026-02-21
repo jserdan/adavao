@@ -797,66 +797,7 @@ app.get('/api/version', (req, res) => {
   })();
 });
 
-// SSE stream for live updates across apps
-let cachedVersion = null;
-
-async function getLiveDataVersion() {
-  try {
-    const [rows] = await db.query(
-      `SELECT GREATEST(
-         COALESCE((SELECT MAX(updated_at) FROM reports), '1970-01-01'::timestamp),
-         COALESCE((SELECT MAX(updated_at) FROM patrol_dispatches), '1970-01-01'::timestamp),
-         COALESCE((SELECT MAX(updated_at) FROM announcements), '1970-01-01'::timestamp),
-         COALESCE((SELECT MAX(updated_at) FROM messages), '1970-01-01'::timestamp),
-         COALESCE((SELECT MAX(updated_at) FROM users_public), '1970-01-01'::timestamp),
-         COALESCE((SELECT MAX(updated_at) FROM locations), '1970-01-01'::timestamp),
-         COALESCE((SELECT MAX(updated_at) FROM report_media), '1970-01-01'::timestamp)
-       ) AS latest`
-    );
-    const latest = rows?.[0]?.latest;
-    return latest ? new Date(latest).toISOString() : new Date(0).toISOString();
-  } catch (err) {
-    return new Date().toISOString();
-  }
-}
-
-app.get('/api/stream', async (req, res) => {
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.setHeader('X-Accel-Buffering', 'no');
-  res.flushHeaders?.();
-
-  let closed = false;
-  let lastSentVersion = null;
-
-  const sendEvent = (event, data) => {
-    if (closed) return;
-    res.write(`event: ${event}\n`);
-    res.write(`data: ${JSON.stringify(data)}\n\n`);
-  };
-
-  sendEvent('tick', { ts: Date.now() });
-
-  const interval = setInterval(async () => {
-    if (closed) return;
-    const currentVersion = await getLiveDataVersion();
-    if (cachedVersion == null) cachedVersion = currentVersion;
-
-    if (currentVersion !== cachedVersion || currentVersion !== lastSentVersion) {
-      cachedVersion = currentVersion;
-      lastSentVersion = currentVersion;
-      sendEvent('update', { version: currentVersion });
-    } else {
-      res.write(`: ping ${Date.now()}\n\n`);
-    }
-  }, 5000);
-
-  req.on('close', () => {
-    closed = true;
-    clearInterval(interval);
-  });
-});
+// SSE streaming has been replaced with Socket.io
 
 // Debug endpoints (disabled by default). Enable by setting ENABLE_DEBUG_ENDPOINTS=true on Render.
 // Guarded by x-debug-key header matching DEBUG_KEY env var.
@@ -995,7 +936,7 @@ const { runMigrations } = require('./runMigrations');
     console.warn("⚠️ Migrations failed, but starting server anyway:", err?.message || err);
   }
 
-  app.listen(PORT, "0.0.0.0", async () => {
+  const server = app.listen(PORT, "0.0.0.0", async () => {
     console.log(`🚀 Server running at http://localhost:${PORT}`);
     // console.log(`   Local Network: http://${require('ip').address()}:${PORT}`);
 
@@ -1057,10 +998,13 @@ const { runMigrations } = require('./runMigrations');
 
       // Start pinging after 5 seconds
       console.log("⏳ Starting keep-alive timer (5s delay)...");
+      /*
+      // Temporarily disabled auto-ping as requested
       setTimeout(() => {
         keepAlive(); // First ping
         setInterval(keepAlive, KEEP_ALIVE_INTERVAL);
       }, 5000); // Reduced to 5s for faster feedback
+      */
     } else {
       console.log('ℹ️ Keep-alive disabled: RENDER_EXTERNAL_URL not set?');
       console.log('   Env vars:', {
@@ -1069,4 +1013,54 @@ const { runMigrations } = require('./runMigrations');
       });
     }
   });
+
+  // Init Socket.io
+  const { Server } = require("socket.io");
+  const io = new Server(server, {
+    cors: {
+      origin: "*",
+      methods: ["GET", "POST"]
+    }
+  });
+
+  io.on('connection', (socket) => {
+    socket.emit('tick', { ts: Date.now() });
+
+    socket.on('disconnect', () => {
+      // client disconnected
+    });
+  });
+
+  let cachedVersion = null;
+  async function getLiveDataVersion() {
+    try {
+      const db = require('./db');
+      const [rows] = await db.query(
+        `SELECT GREATEST(
+           COALESCE((SELECT MAX(updated_at) FROM reports), '1970-01-01'::timestamp),
+           COALESCE((SELECT MAX(updated_at) FROM patrol_dispatches), '1970-01-01'::timestamp),
+           COALESCE((SELECT MAX(updated_at) FROM announcements), '1970-01-01'::timestamp),
+           COALESCE((SELECT MAX(updated_at) FROM messages), '1970-01-01'::timestamp),
+           COALESCE((SELECT MAX(updated_at) FROM users_public), '1970-01-01'::timestamp),
+           COALESCE((SELECT MAX(updated_at) FROM locations), '1970-01-01'::timestamp),
+           COALESCE((SELECT MAX(updated_at) FROM report_media), '1970-01-01'::timestamp)
+         ) AS latest`
+      );
+      const latest = rows?.[0]?.latest;
+      return latest ? new Date(latest).toISOString() : new Date(0).toISOString();
+    } catch (err) {
+      return new Date().toISOString();
+    }
+  }
+
+  // Polling for live data updates to emit to all clients
+  setInterval(async () => {
+    const currentVersion = await getLiveDataVersion();
+    if (cachedVersion == null) cachedVersion = currentVersion;
+
+    if (currentVersion !== cachedVersion) {
+      cachedVersion = currentVersion;
+      io.emit('update', { version: currentVersion });
+    }
+  }, 1000);
 })();
