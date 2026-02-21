@@ -68,3 +68,5 @@ secrets_backup.txt
 
 
 gradle_cache/
+
+pgsql17_tools/

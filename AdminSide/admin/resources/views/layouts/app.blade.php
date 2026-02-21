@@ -729,6 +729,7 @@
             </div>
         </div>
         
+        <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
         @yield('scripts')
         
         <script>
@@ -852,53 +853,37 @@
                 }
             });
 
-            // SSE auto-refresh for live updates
-            (function initSseAutoRefresh() {
-                if (!('EventSource' in window)) return;
+            // Socket.io auto-refresh for live updates
+            (function initSocketAutoRefresh() {
+                // Ensure io is loaded from CDN
+                if (typeof io === 'undefined') return;
 
+                // Extract base URL from the old SSE URL format
                 const sseUrl = "{{ env('SSE_URL', 'https://userside-node-server.onrender.com/api/stream') }}";
+                const apiUrl = sseUrl.replace('/api/stream', '');
+                
                 let lastRefresh = 0;
-                let source = null;
-                let pollTimer = null;
+                
+                const socket = io(apiUrl, {
+                    transports: ['websocket', 'polling'],
+                    reconnectionDelayMax: 5000,
+                });
 
                 const handleUpdate = () => {
                     const now = Date.now();
                     if (document.visibilityState !== 'visible') return;
-                    if (now - lastRefresh < 3000) return;
+                    if (now - lastRefresh < 1000) return;
                     lastRefresh = now;
                     window.location.reload();
                 };
 
-                const connect = () => {
-                    if (source) {
-                        try { source.close(); } catch (e) {}
-                    }
+                socket.on('update', handleUpdate);
 
-                    try {
-                        source = new EventSource(sseUrl);
-
-                        source.addEventListener('update', handleUpdate);
-                        // Don't listen to 'tick' - it's just a keep-alive
-
-                        source.onerror = () => {
-                            try { source.close(); } catch (e) {}
-                            setTimeout(connect, 5000);
-                        };
-                    } catch (e) {
-                        // Fallback polling every 15 seconds
-                        if (!pollTimer) {
-                            pollTimer = setInterval(handleUpdate, 15000);
-                        }
-                    }
-                };
-
-                connect();
-
-                // Reconnect when tab becomes visible
+                // Force reconnect when tab becomes visible (prevent stale connections)
                 document.addEventListener('visibilitychange', () => {
                     if (document.visibilityState === 'visible') {
-                        if (!source || source.readyState === 2) {
-                            connect();
+                        if (!socket.connected) {
+                            socket.connect();
                         }
                     }
                 });

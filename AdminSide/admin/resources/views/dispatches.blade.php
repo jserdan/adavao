@@ -441,10 +441,12 @@
 
 @section('scripts')
 <script>
+    window.serverClientTimeOffset = window.serverClientTimeOffset || (Math.floor(Date.now() / 1000) - {{ time() }});
+
     // Response Time Timer Logic
     function updateSLATimers() {
         const timers = document.querySelectorAll('.sla-timer');
-        const now = Math.floor(Date.now() / 1000);
+        const now = Math.floor(Date.now() / 1000) - window.serverClientTimeOffset;
         
         timers.forEach(timer => {
             const createdAt = parseInt(timer.getAttribute('data-created-at'));
@@ -463,12 +465,10 @@
             }
             
             if (elapsedSeconds < threeMinutes) {
-                const remainingSeconds = threeMinutes - elapsedSeconds;
-                timer.textContent = formatTime(remainingSeconds);
+                timer.textContent = formatTime(elapsedSeconds);
                 timer.className = 'sla-timer countdown';
             } else {
-                const exceededSeconds = elapsedSeconds - threeMinutes;
-                timer.textContent = '+' + formatTime(exceededSeconds);
+                timer.textContent = formatTime(elapsedSeconds);
                 timer.className = 'sla-timer exceeded';
             }
         });

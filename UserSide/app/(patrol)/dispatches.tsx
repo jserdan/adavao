@@ -104,11 +104,11 @@ export default function PatrolDispatchesScreen() {
     // Auto-refresh dispatches every 2 seconds (silent)
     useEffect(() => {
         if (!userId) return;
-        
+
         const interval = setInterval(() => {
             loadDispatches(false);
         }, 2000);
-        
+
         return () => clearInterval(interval);
     }, [userId, stationId, activeTab]);
 
@@ -294,7 +294,7 @@ export default function PatrolDispatchesScreen() {
         try {
             const parsed = JSON.parse(reportType);
             if (Array.isArray(parsed)) return parsed.join(', ');
-        } catch {}
+        } catch { }
         return reportType || 'Unknown';
     };
 
@@ -436,8 +436,8 @@ export default function PatrolDispatchesScreen() {
                         {dispatch.status === 'arrived'
                             ? `${officerName} has arrived at the location`
                             : dispatch.status === 'en_route'
-                            ? `${officerName} is en route`
-                            : `${officerName} has accepted this dispatch`
+                                ? `${officerName} is en route`
+                                : `${officerName} has accepted this dispatch`
                         }
                     </Text>
                 </View>
@@ -479,9 +479,14 @@ export default function PatrolDispatchesScreen() {
                     <Ionicons name="arrow-back" size={24} color={COLORS.textPrimary} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Dispatches</Text>
-                <TouchableOpacity onPress={onRefresh} style={styles.refreshButton}>
-                    <Ionicons name="refresh" size={24} color={COLORS.primary} />
-                </TouchableOpacity>
+                <View style={styles.headerRight}>
+                    <TouchableOpacity onPress={() => router.push('/(patrol)/history')} style={styles.historyButton}>
+                        <Ionicons name="time-outline" size={24} color={COLORS.primary} />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={onRefresh} style={styles.refreshButton}>
+                        <Ionicons name="refresh" size={24} color={COLORS.primary} />
+                    </TouchableOpacity>
+                </View>
             </View>
 
             {/* Tabs */}
@@ -576,8 +581,16 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         color: COLORS.textPrimary,
     },
+    headerRight: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
     refreshButton: {
         padding: spacing.sm,
+    },
+    historyButton: {
+        padding: spacing.sm,
+        marginRight: spacing.sm,
     },
     tabContainer: {
         flexDirection: 'row',

@@ -862,9 +862,6 @@ function submitFlag() {
 }
 
 function unflagUser(userId) {
-    if (!confirm('Are you sure you want to remove all restrictions for this user?')) {
-        return;
-    }
     
     console.log('Unflagging user ' + userId);
     

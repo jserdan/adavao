@@ -515,7 +515,7 @@ function viewRequest(requestId) {
 async function reviewRequest(action) {
     if (!currentRequest) return;
     
-    if (!confirm(`Are you sure you want to ${action} this reassignment request?`)) {
+    if (!(await confirm(`Are you sure you want to ${action} this reassignment request?`))) {
         return;
     }
     

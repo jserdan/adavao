@@ -4,3 +4,22 @@
 
 expo-env.d.ts
 # @end expo-cli
+
+# Dependencies
+node_modules/
+
+# Build outputs
+android/
+ios/
+
+# Large local-only folders
+evidence/
+uploads/
+
+# Environment
+.env
+.env.*
+
+# Editor
+.vscode/
+.DS_Store

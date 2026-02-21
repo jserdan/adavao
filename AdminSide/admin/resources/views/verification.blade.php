@@ -1118,9 +1118,8 @@ function updateLightboxCounter() {
     counter.textContent = `${currentImageIndex + 1} of ${currentImages.length}`;
 }
 
-// Approve verification
 async function approveVerification(verificationId, userId) {
-    if (!confirm('Are you sure you want to approve this verification request?')) {
+    if (!(await confirm('Are you sure you want to approve this verification request?'))) {
         return;
     }
     
@@ -1154,10 +1153,8 @@ async function approveVerification(verificationId, userId) {
     }
 }
 
-// Reject verification
-// Open Rejection Modal
-function rejectVerification(verificationId, userId) {
-    if (!confirm('Are you sure you want to reject this verification request?')) {
+async function rejectVerification(verificationId, userId) {
+    if (!(await confirm('Are you sure you want to reject this verification request?'))) {
         return;
     }
     

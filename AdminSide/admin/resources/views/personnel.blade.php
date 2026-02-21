@@ -894,10 +894,10 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Unassign station button click handler
     document.querySelectorAll('.unassign-station-btn').forEach(btn => {
-        btn.addEventListener('click', function(e) {
+        btn.addEventListener('click', async function(e) {
             e.preventDefault();
             const userId = this.getAttribute('data-user-id');
-            if (confirm('Are you sure you want to unassign this officer from their current station?')) {
+            if (await confirm('Are you sure you want to unassign this officer from their current station?')) {
                 unassignStationFromOfficer(userId);
             }
         });
