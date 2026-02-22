@@ -1049,7 +1049,8 @@ const { runMigrations } = require('./runMigrations');
       const latest = rows?.[0]?.latest;
       return latest ? new Date(latest).toISOString() : new Date(0).toISOString();
     } catch (err) {
-      return new Date().toISOString();
+      console.error('⚠️ Error getting live data version:', err.message);
+      return cachedVersion || new Date(0).toISOString();
     }
   }
 
