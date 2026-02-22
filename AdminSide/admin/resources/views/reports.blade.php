@@ -4410,8 +4410,17 @@ function generatePDF(report) {
         selectElement.innerHTML = '<option value="">Loading officers...</option>';
         selectElement.disabled = true;
         
-        fetch('/api/on-duty-officers')
-            .then(res => res.json())
+        const apiUrl = "{{ url('/api/on-duty-officers') }}";
+        fetch(apiUrl, {
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+            .then(res => {
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                return res.json();
+            })
             .then(data => {
                 const officers = data.officers || [];
                 selectElement.innerHTML = '<option value="">-- Select an Officer --</option>';
@@ -4431,7 +4440,7 @@ function generatePDF(report) {
             })
             .catch(err => {
                 console.error('Error fetching officers:', err);
-                selectElement.innerHTML = '<option value="">Error loading officers</option>';
+                selectElement.innerHTML = `<option value="">Error: ${err.message}</option>`;
             });
     }
     
