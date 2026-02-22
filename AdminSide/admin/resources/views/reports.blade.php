@@ -3089,27 +3089,42 @@ setInterval(updateSLATimers, 1000);
                         let patrolResponseContent = '';
                         const dispatch = report.dispatch;
                         if (dispatch) {
-                            const fmtDate = (d) => d ? new Date(d).toLocaleString('en-US', {
-                                timeZone: 'Asia/Manila', year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit'
-                            }) : '—';
+                            // Helper to parse timestamps: Laravel fields (created_at, dispatched_at) are stored in Manila local time.
+                            // Node fields (accepted_at, en_route_at, arrived_at, completed_at) are stored as Postgres UTC time.
+                            const parseServerTime = (ts, isNodeField = false) => {
+                                if (!ts) return new Date();
+                                const cleanTs = String(ts).replace('T', ' ').split('.')[0].replace('Z', '');
+                                const date = new Date(cleanTs.replace(/-/g, '/'));
+                                if (isNodeField) {
+                                    date.setHours(date.getHours() + 8); // Convert Node UTC to Manila +8
+                                }
+                                return date;
+                            };
+
+                            const fmtDate = (d, isNodeField = false) => {
+                                if (!d) return '—';
+                                return parseServerTime(d, isNodeField).toLocaleString('en-US', {
+                                    year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit'
+                                });
+                            };
 
                             const officerName = dispatch.officer_name || (dispatch.patrol_officer ? `${dispatch.patrol_officer.firstname || ''} ${dispatch.patrol_officer.lastname || ''}`.trim() : 'Unknown Officer');
-                            // Calculate response time from report creation to officer arrival (matches table column)
+                            
+                            // Calculate response time from report creation to officer arrival
                             let responseTimeDisp = '—';
                             if (report.created_at) {
-                                // Helper to prevent browser from adding +8 timezone offset to server time
-                                const parseServerTime = (ts) => {
-                                    if (!ts) return new Date();
-                                    const cleanTs = String(ts).replace('T', ' ').split('.')[0].replace('Z', '');
-                                    return new Date(cleanTs.replace(/-/g, '/'));
-                                };
-                                const createdAt = parseServerTime(report.created_at);
-                                const endTime = dispatch.arrived_at ? parseServerTime(dispatch.arrived_at) : new Date();
+                                const createdAt = parseServerTime(report.created_at, false); // Laravel
+                                const endTime = dispatch.arrived_at ? parseServerTime(dispatch.arrived_at, true) : new Date();
+                                
                                 const elapsedSec = Math.floor((endTime - createdAt) / 1000);
-                                const h = Math.floor(elapsedSec / 3600);
-                                const m = Math.floor((elapsedSec % 3600) / 60);
-                                const s = elapsedSec % 60;
-                                responseTimeDisp = h > 0 ? `${h}h ${m}m ${s}s` : (m > 0 ? `${m}m ${s}s` : `${s}s`);
+                                const isNegative = elapsedSec < 0;
+                                const absSec = Math.abs(elapsedSec);
+                                const h = Math.floor(absSec / 3600);
+                                const m = Math.floor((absSec % 3600) / 60);
+                                const s = absSec % 60;
+                                
+                                const sign = isNegative ? '-' : '';
+                                responseTimeDisp = sign + (h > 0 ? `${h}h ${m}m ${s}s` : (m > 0 ? `${m}m ${s}s` : `${s}s`));
                             }
                             const validityLabel = dispatch.is_valid === true || dispatch.is_valid === 'true' ? '✅ Valid' : dispatch.is_valid === false || dispatch.is_valid === 'false' ? '❌ Invalid' : '⏳ Pending';
                             const validityColor = dispatch.is_valid === true || dispatch.is_valid === 'true' ? '#065f46' : dispatch.is_valid === false || dispatch.is_valid === 'false' ? '#991b1b' : '#6b7280';
@@ -3155,29 +3170,29 @@ setInterval(updateSLATimers, 1000);
                                     <div class="info-row">
                                         <div class="detail-item">
                                             <div class="detail-label">📤 Dispatched</div>
-                                            <div class="detail-value">${fmtDate(dispatch.dispatched_at)}</div>
+                                            <div class="detail-value">${fmtDate(dispatch.dispatched_at, false)}</div>
                                         </div>
                                         <div class="detail-item">
                                             <div class="detail-label">✅ Accepted</div>
-                                            <div class="detail-value">${fmtDate(dispatch.accepted_at)}</div>
+                                            <div class="detail-value">${fmtDate(dispatch.accepted_at, true)}</div>
                                         </div>
                                     </div>
 
                                     <div class="info-row">
                                         <div class="detail-item">
                                             <div class="detail-label">🚗 En Route</div>
-                                            <div class="detail-value">${fmtDate(dispatch.en_route_at)}</div>
+                                            <div class="detail-value">${fmtDate(dispatch.en_route_at, true)}</div>
                                         </div>
                                         <div class="detail-item">
                                             <div class="detail-label">📍 Arrived</div>
-                                            <div class="detail-value">${fmtDate(dispatch.arrived_at)}</div>
+                                            <div class="detail-value">${fmtDate(dispatch.arrived_at, true)}</div>
                                         </div>
                                     </div>
 
                                     <div class="info-row">
                                         <div class="detail-item">
                                             <div class="detail-label">🏁 Completed</div>
-                                            <div class="detail-value">${fmtDate(dispatch.completed_at)}</div>
+                                            <div class="detail-value">${fmtDate(dispatch.completed_at, true)}</div>
                                         </div>
                                         <div class="detail-item">
                                             <div class="detail-label">🔍 Validation</div>
