@@ -11,25 +11,25 @@ const handleLogout = async (req, res) => {
   const { userId, email } = req.body;
 
   if (!userId && !email) {
-    return res.status(400).json({ 
-      success: false, 
-      message: "User ID or email is required" 
+    return res.status(400).json({
+      success: false,
+      message: "User ID or email is required"
     });
   }
 
   try {
-    // Clear push_token on logout (only column that exists in schema)
+    // Clear push_token and set off-duty on logout
     if (userId) {
       await db.query(
         `UPDATE users_public 
-         SET push_token = NULL
+         SET push_token = NULL, is_on_duty = false
          WHERE id = $1`,
         [userId]
       );
     } else if (email) {
       await db.query(
         `UPDATE users_public 
-         SET push_token = NULL
+         SET push_token = NULL, is_on_duty = false
          WHERE LOWER(TRIM(email)) = LOWER(TRIM($1))`,
         [email]
       );
@@ -60,27 +60,47 @@ const handlePatrolLogout = async (req, res) => {
   const { odId, odEmail } = req.body;
 
   if (!odId && !odEmail) {
-    return res.status(400).json({ 
-      success: false, 
-      message: "Officer ID or email is required" 
+    return res.status(400).json({
+      success: false,
+      message: "Officer ID or email is required"
     });
   }
 
   try {
     let officerId = odId;
 
-    // If email provided, get officer ID first
     if (!officerId && odEmail) {
-      const [officer] = await db.query(
-        `SELECT id FROM user_admin WHERE LOWER(TRIM(email)) = LOWER(TRIM($1))`,
+      // Check in users_public first (new schema)
+      const [publicOfficer] = await db.query(
+        `SELECT id FROM users_public WHERE LOWER(TRIM(email)) = LOWER(TRIM($1))`,
         [odEmail]
       );
-      if (officer.length > 0) {
-        officerId = officer[0].id;
+      if (publicOfficer.length > 0) {
+        officerId = publicOfficer[0].id;
+      } else {
+        // Fallback to user_admin
+        const [adminOfficer] = await db.query(
+          `SELECT id FROM user_admin WHERE LOWER(TRIM(email)) = LOWER(TRIM($1))`,
+          [odEmail]
+        );
+        if (adminOfficer.length > 0) {
+          officerId = adminOfficer[0].id;
+        }
       }
     }
 
     if (officerId) {
+      // Update users_public (new schema)
+      try {
+        await db.query(
+          `UPDATE users_public 
+           SET is_on_duty = false, push_token = NULL
+           WHERE id = $1`,
+          [officerId]
+        );
+      } catch (e) {
+        console.warn("⚠️ Could not update users_public is_on_duty:", e.message);
+      }
       // Try to update user_admin - gracefully handle missing columns
       try {
         // First try with is_online only (more likely to exist)
