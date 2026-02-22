@@ -4423,14 +4423,22 @@ function generatePDF(report) {
         fetch(apiUrl, {
             headers: {
                 'Accept': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            }
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || ''
+            },
+            credentials: 'same-origin'
         })
             .then(res => {
+                console.log('🚓 Officers API response status:', res.status, 'content-type:', res.headers.get('content-type'));
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const contentType = res.headers.get('content-type') || '';
+                if (!contentType.includes('application/json')) {
+                    throw new Error('Server returned non-JSON response (possible auth redirect)');
+                }
                 return res.json();
             })
             .then(data => {
+                console.log('🚓 Officers data:', data);
                 const officers = data.officers || [];
                 selectElement.innerHTML = '<option value="">-- Select an Officer --</option>';
                 if (officers.length === 0) {
@@ -4448,7 +4456,7 @@ function generatePDF(report) {
                 }
             })
             .catch(err => {
-                console.error('Error fetching officers:', err);
+                console.error('🚓 Error fetching officers:', err);
                 selectElement.innerHTML = `<option value="">Error: ${err.message}</option>`;
             });
     }
