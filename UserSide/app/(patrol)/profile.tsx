@@ -71,7 +71,7 @@ export default function PatrolProfile() {
             if (stored) {
                 const user = JSON.parse(stored);
                 setUserData(user);
-                
+
                 // Fetch station info if user has assigned station
                 if (user.assigned_station_id) {
                     fetchStationInfo(user.assigned_station_id);
@@ -96,8 +96,8 @@ export default function PatrolProfile() {
                             };
                             setUserData(freshUser);
                             // Update AsyncStorage with decrypted data so it persists
-                            AsyncStorage.setItem('userData', JSON.stringify(freshUser)).catch(() => {});
-                            
+                            AsyncStorage.setItem('userData', JSON.stringify(freshUser)).catch(() => { });
+
                             // If fresh data has station info from API, use it directly
                             if (data.data.station && data.data.station.station_name) {
                                 setStationInfo({
@@ -184,9 +184,17 @@ export default function PatrolProfile() {
             ]);
 
             // Navigate directly to login screen
+            // Dismiss patrol stack and go to login
+            while (router.canGoBack()) {
+                router.back();
+            }
             router.replace('/(tabs)/login');
         } catch (error) {
             console.error('Error logging out:', error);
+            // Dismiss patrol stack and go to login
+            while (router.canGoBack()) {
+                router.back();
+            }
             router.replace('/(tabs)/login');
         }
     };
@@ -257,7 +265,7 @@ export default function PatrolProfile() {
                         {userData?.firstname} {userData?.lastname}
                     </Text>
                     <Text style={styles.userRole}>Patrol Officer</Text>
-                    
+
                     {userData?.badge_number && (
                         <View style={styles.badgeRow}>
                             <Ionicons name="shield-checkmark" size={16} color={COLORS.primary} />
@@ -269,7 +277,7 @@ export default function PatrolProfile() {
                 {/* Info Section */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Contact Information</Text>
-                    
+
                     <View style={styles.infoCard}>
                         <View style={styles.infoRow}>
                             <View style={styles.infoIcon}>
@@ -298,7 +306,7 @@ export default function PatrolProfile() {
                 {/* Station Section */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Assigned Station</Text>
-                    
+
                     <View style={styles.infoCard}>
                         <View style={styles.infoRow}>
                             <View style={styles.infoIcon}>
@@ -332,7 +340,7 @@ export default function PatrolProfile() {
                 {/* Account Info Section */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Account</Text>
-                    
+
                     <View style={styles.infoCard}>
                         <View style={styles.infoRow}>
                             <View style={styles.infoIcon}>

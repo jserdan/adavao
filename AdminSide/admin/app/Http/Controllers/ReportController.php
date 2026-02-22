@@ -154,7 +154,7 @@ class ReportController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Report::with(['user.verification', 'location', 'media', 'policeStation', 'dispatch'])
+        $query = Report::with(['user.verification', 'location', 'media', 'policeStation', 'dispatch.patrolOfficer'])
             ->join('locations', 'reports.location_id', '=', 'locations.location_id');
         
         // Exclude reports without valid coordinates
@@ -776,7 +776,7 @@ class ReportController extends Controller
     public function getDetails($id)
     {
         try {
-            $report = Report::with(['user.verification', 'location', 'media', 'policeStation', 'timelines.actor'])->findOrFail($id);
+            $report = Report::with(['user.verification', 'location', 'media', 'policeStation', 'timelines.actor', 'dispatch.patrolOfficer'])->findOrFail($id);
 
             // Get authenticated user and role
             $authUser = auth()->user();

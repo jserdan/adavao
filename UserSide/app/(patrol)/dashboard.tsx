@@ -94,11 +94,11 @@ export default function PatrolDashboard() {
     // Auto-refresh dispatch counts every 2 seconds (silent)
     useEffect(() => {
         if (!userId) return;
-        
+
         const interval = setInterval(() => {
             loadDispatchCounts();
         }, 2000);
-        
+
         return () => clearInterval(interval);
     }, [userId, stationId]);
 
@@ -221,7 +221,7 @@ export default function PatrolDashboard() {
         try {
             await notificationService.markAsRead(notificationId, userId);
             // Update local state
-            setNotifications(prev => 
+            setNotifications(prev =>
                 prev.map(n => n.id === notificationId ? { ...n, read: true } : n)
             );
             setUnreadNotifications(prev => Math.max(0, prev - 1));
@@ -261,12 +261,12 @@ export default function PatrolDashboard() {
     // Load data on mount
     useEffect(() => {
         fetchAnnouncements();
-        
+
         // Auto-refresh every 30 seconds
         const interval = setInterval(() => {
             fetchAnnouncements();
         }, 30000);
-        
+
         return () => clearInterval(interval);
     }, [stationId]);
 
@@ -348,9 +348,17 @@ export default function PatrolDashboard() {
                 'inactivityLogout'
             ]);
 
+            // Dismiss patrol stack and go to login
+            while (router.canGoBack()) {
+                router.back();
+            }
             router.replace('/(tabs)/login');
         } catch (error) {
             console.error('Error logging out:', error);
+            // Dismiss patrol stack and go to login
+            while (router.canGoBack()) {
+                router.back();
+            }
             router.replace('/(tabs)/login');
         }
     };
@@ -384,7 +392,7 @@ export default function PatrolDashboard() {
                     </View>
                 </View>
                 <View style={styles.headerRight}>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                         style={styles.notificationButton}
                         onPress={() => setShowNotificationsModal(true)}
                     >
@@ -397,7 +405,7 @@ export default function PatrolDashboard() {
                             </View>
                         )}
                     </TouchableOpacity>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                         style={styles.logoutButton}
                         onPress={() => setShowLogoutDialog(true)}
                     >
@@ -448,7 +456,7 @@ export default function PatrolDashboard() {
 
                 {/* Quick Action Button - Dispatches Only */}
                 <View style={styles.quickActionsContainer}>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                         style={styles.quickActionButtonFull}
                         onPress={() => router.push('/(patrol)/dispatches')}
                     >
@@ -465,8 +473,8 @@ export default function PatrolDashboard() {
                         <View style={styles.quickActionTextContainer}>
                             <Text style={styles.quickActionTextMain}>View Dispatches</Text>
                             <Text style={styles.quickActionTextSub}>
-                                {pendingDispatchCount > 0 
-                                    ? `${pendingDispatchCount} pending dispatch${pendingDispatchCount > 1 ? 'es' : ''}` 
+                                {pendingDispatchCount > 0
+                                    ? `${pendingDispatchCount} pending dispatch${pendingDispatchCount > 1 ? 'es' : ''}`
                                     : 'No pending dispatches'}
                             </Text>
                         </View>
@@ -490,8 +498,8 @@ export default function PatrolDashboard() {
                         </View>
                     ) : (
                         announcements.map((announcement) => (
-                            <TouchableOpacity 
-                                key={announcement.id} 
+                            <TouchableOpacity
+                                key={announcement.id}
                                 style={styles.announcementCard}
                                 onPress={() => handleAnnouncementPress(announcement)}
                             >
@@ -518,21 +526,21 @@ export default function PatrolDashboard() {
 
             {/* Bottom Navigation */}
             <View style={styles.bottomNav}>
-                <TouchableOpacity 
+                <TouchableOpacity
                     style={styles.navItem}
                     onPress={() => setActiveTab('home')}
                 >
                     <Ionicons name={activeTab === 'home' ? 'home' : 'home-outline'} size={24} color={activeTab === 'home' ? COLORS.primary : COLORS.textMuted} />
                     <Text style={[styles.navText, activeTab === 'home' && styles.navTextActive]}>Home</Text>
                 </TouchableOpacity>
-                <TouchableOpacity 
+                <TouchableOpacity
                     style={styles.navItem}
                     onPress={() => router.push('/(patrol)/chat')}
                 >
                     <Ionicons name="chatbubbles-outline" size={24} color={COLORS.textMuted} />
                     <Text style={styles.navText}>Chat</Text>
                 </TouchableOpacity>
-                <TouchableOpacity 
+                <TouchableOpacity
                     style={styles.navItem}
                     onPress={() => router.push('/(patrol)/profile')}
                 >
@@ -569,7 +577,7 @@ export default function PatrolDashboard() {
                                 </View>
                                 <ScrollView style={styles.announcementModalBody}>
                                     <Text style={styles.announcementModalText}>{selectedAnnouncement.content}</Text>
-                                    
+
                                     {/* Attachments */}
                                     {selectedAnnouncement.attachments && selectedAnnouncement.attachments.length > 0 && (
                                         <View style={styles.attachmentsSection}>
@@ -578,10 +586,10 @@ export default function PatrolDashboard() {
                                             </Text>
                                             {selectedAnnouncement.attachments.map((attachment: string, index: number) => {
                                                 const isImage = attachment.match(/\.(jpg|jpeg|png|gif|webp)$/i);
-                                                
+
                                                 if (isImage) {
                                                     return (
-                                                        <TouchableOpacity 
+                                                        <TouchableOpacity
                                                             key={index}
                                                             onPress={() => Linking.openURL(attachment)}
                                                             style={styles.imageAttachmentContainer}
@@ -597,18 +605,18 @@ export default function PatrolDashboard() {
                                                         </TouchableOpacity>
                                                     );
                                                 }
-                                                
+
                                                 return (
-                                                    <TouchableOpacity 
-                                                        key={index} 
+                                                    <TouchableOpacity
+                                                        key={index}
                                                         style={styles.attachmentItem}
                                                         onPress={() => Linking.openURL(attachment)}
                                                     >
                                                         <View style={styles.attachmentIcon}>
-                                                            <Ionicons 
+                                                            <Ionicons
                                                                 name="document-outline"
-                                                                size={20} 
-                                                                color={COLORS.primary} 
+                                                                size={20}
+                                                                color={COLORS.primary}
                                                             />
                                                         </View>
                                                         <Text style={styles.attachmentName} numberOfLines={1}>
@@ -623,7 +631,7 @@ export default function PatrolDashboard() {
                                 </ScrollView>
                             </>
                         )}
-                        <TouchableOpacity 
+                        <TouchableOpacity
                             style={styles.announcementModalClose}
                             onPress={() => setShowAnnouncementModal(false)}
                         >
@@ -656,8 +664,8 @@ export default function PatrolDashboard() {
                                 </View>
                             ) : (
                                 allAnnouncements.map((announcement) => (
-                                    <TouchableOpacity 
-                                        key={announcement.id} 
+                                    <TouchableOpacity
+                                        key={announcement.id}
                                         style={styles.allAnnouncementItem}
                                         onPress={() => {
                                             setShowAllAnnouncements(false);
@@ -698,7 +706,7 @@ export default function PatrolDashboard() {
                             <Text style={styles.notificationsTitle}>Notifications</Text>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                                 {unreadNotifications > 0 && (
-                                    <TouchableOpacity 
+                                    <TouchableOpacity
                                         onPress={markAllNotificationsAsRead}
                                         style={{ paddingVertical: 4, paddingHorizontal: 8 }}
                                     >
@@ -720,8 +728,8 @@ export default function PatrolDashboard() {
                                 </View>
                             ) : (
                                 notifications.map((notification) => (
-                                    <TouchableOpacity 
-                                        key={notification.id} 
+                                    <TouchableOpacity
+                                        key={notification.id}
                                         style={[
                                             styles.notificationItem,
                                             !notification.read && styles.notificationItemUnread
@@ -741,15 +749,15 @@ export default function PatrolDashboard() {
                                             styles.notificationIcon,
                                             { backgroundColor: notification.read ? COLORS.border : `${COLORS.primary}20` }
                                         ]}>
-                                            <Ionicons 
+                                            <Ionicons
                                                 name={
                                                     notification.type === 'report' ? 'alert-circle' :
-                                                    notification.type === 'verification' ? 'checkmark-circle' :
-                                                    notification.type === 'user_flagged' ? 'warning' :
-                                                    'notifications'
-                                                } 
-                                                size={20} 
-                                                color={notification.read ? COLORS.textMuted : COLORS.primary} 
+                                                        notification.type === 'verification' ? 'checkmark-circle' :
+                                                            notification.type === 'user_flagged' ? 'warning' :
+                                                                'notifications'
+                                                }
+                                                size={20}
+                                                color={notification.read ? COLORS.textMuted : COLORS.primary}
                                             />
                                         </View>
                                         <View style={styles.notificationContent}>
@@ -767,7 +775,7 @@ export default function PatrolDashboard() {
                                             </Text>
                                         </View>
                                         {!notification.read && (
-                                            <TouchableOpacity 
+                                            <TouchableOpacity
                                                 onPress={(e) => {
                                                     e.stopPropagation();
                                                     markNotificationAsRead(notification.id);
@@ -803,7 +811,7 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: COLORS.background,
     },
-    
+
     // Header Styles
     header: {
         flexDirection: 'row',

@@ -2494,47 +2494,10 @@ setInterval(updateSLATimers, 1000);
             console.log('Table sorted by urgency: Critical → High → Medium → Low');
         }
 
-        // Function to update SLA timers every second
-        function updateSLATimers() {
-            const timers = document.querySelectorAll('.sla-timer');
-            const now = Math.floor(Date.now() / 1000);
-            
-            timers.forEach(timer => {
-                const createdAt = parseInt(timer.dataset.createdAt);
-                const arrivedAt = timer.dataset.arrivedAt ? parseInt(timer.dataset.arrivedAt) : null;
-                
-                if (!createdAt) return;
-                
-                // If arrived, timer freezes
-                const elapsedSeconds = arrivedAt ? (arrivedAt - createdAt) : (now - createdAt);
-                const threeMinutes = 180;
-                
-                const m = Math.floor(elapsedSeconds / 60);
-                const s = elapsedSeconds % 60;
-                const timeString = `${m}m ${s}s`;
-                
-                timer.textContent = timeString;
-                
-                if (elapsedSeconds <= threeMinutes) {
-                    if (timer.classList.contains('exceeded')) {
-                        timer.classList.remove('exceeded');
-                        timer.classList.add('countdown');
-                    }
-                } else {
-                    if (timer.classList.contains('countdown')) {
-                        timer.classList.remove('countdown');
-                        timer.classList.add('exceeded');
-                    }
-                }
-            });
-        }
-
         // Start auto-refresh when page loads
         document.addEventListener('DOMContentLoaded', function() {
             // Check for new reports every 2 seconds for real-time updates
             autoRefreshInterval = setInterval(checkForNewReports, 2000);
-            // Update timers every second
-            setInterval(updateSLATimers, 1000);
             
             console.log('Auto-refresh enabled: Checking for new reports every 2 seconds');
             
@@ -3070,8 +3033,107 @@ setInterval(updateSLATimers, 1000);
                             </div>
                         `;
 
+                        // Build Patrol Response section (if dispatch exists)
+                        let patrolResponseContent = '';
+                        const dispatch = report.dispatch;
+                        if (dispatch) {
+                            const fmtDate = (d) => d ? new Date(d).toLocaleString('en-US', {
+                                timeZone: 'Asia/Manila', year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit'
+                            }) : '—';
+
+                            const officerName = dispatch.officer_name || (dispatch.patrol_officer ? `${dispatch.patrol_officer.firstname || ''} ${dispatch.patrol_officer.lastname || ''}`.trim() : 'Unknown Officer');
+                            const responseTimeSec = dispatch.response_time || null;
+                            const responseTimeDisp = responseTimeSec !== null ? `${Math.floor(responseTimeSec / 60)}m ${responseTimeSec % 60}s` : '—';
+                            const validityLabel = dispatch.is_valid === true || dispatch.is_valid === 'true' ? '✅ Valid' : dispatch.is_valid === false || dispatch.is_valid === 'false' ? '❌ Invalid' : '⏳ Pending';
+                            const validityColor = dispatch.is_valid === true || dispatch.is_valid === 'true' ? '#065f46' : dispatch.is_valid === false || dispatch.is_valid === 'false' ? '#991b1b' : '#6b7280';
+
+                            // Verification evidence media
+                            let evidenceMediaHtml = '';
+                            if (dispatch.verification_media_url) {
+                                const nodeBackendUrl = '{{ config("app.node_backend_url", "http://localhost:3000") }}';
+                                const evidenceUrl = dispatch.verification_media_url.startsWith('http') 
+                                    ? dispatch.verification_media_url 
+                                    : `${nodeBackendUrl}${dispatch.verification_media_url}`;
+                                const isVideo = /\.(mp4|mov|avi|webm)$/i.test(evidenceUrl);
+                                if (isVideo) {
+                                    evidenceMediaHtml = `
+                                        <div style="margin-top: 12px;">
+                                            <div class="detail-label">📹 Verification Evidence</div>
+                                            <video src="${evidenceUrl}" controls style="max-width: 100%; max-height: 300px; border-radius: 8px; margin-top: 6px;"></video>
+                                        </div>`;
+                                } else {
+                                    evidenceMediaHtml = `
+                                        <div style="margin-top: 12px;">
+                                            <div class="detail-label">📸 Verification Evidence</div>
+                                            <img src="${evidenceUrl}" alt="Verification evidence" onclick="openLightbox(0, '[&quot;${evidenceUrl}&quot;]')" style="max-width: 100%; max-height: 300px; border-radius: 8px; margin-top: 6px; cursor: pointer; object-fit: contain;" onerror="this.src='https://placehold.co/400x300?text=Image+Not+Found'">
+                                        </div>`;
+                                }
+                            }
+
+                            patrolResponseContent = `
+                                <div class="report-info-section" style="border-left: 4px solid #3b82f6;">
+                                    <h3 class="report-info-title" style="color: #1e40af;">🚔 Patrol Response</h3>
+                                    
+                                    <div class="info-row">
+                                        <div class="detail-item">
+                                            <div class="detail-label">👮 Responding Officer</div>
+                                            <div class="detail-value" style="font-weight: 600;">${officerName}</div>
+                                        </div>
+                                        <div class="detail-item">
+                                            <div class="detail-label">⏱️ Response Time</div>
+                                            <div class="detail-value">${responseTimeDisp}</div>
+                                        </div>
+                                    </div>
+
+                                    <div class="info-row">
+                                        <div class="detail-item">
+                                            <div class="detail-label">📤 Dispatched</div>
+                                            <div class="detail-value">${fmtDate(dispatch.dispatched_at)}</div>
+                                        </div>
+                                        <div class="detail-item">
+                                            <div class="detail-label">✅ Accepted</div>
+                                            <div class="detail-value">${fmtDate(dispatch.accepted_at)}</div>
+                                        </div>
+                                    </div>
+
+                                    <div class="info-row">
+                                        <div class="detail-item">
+                                            <div class="detail-label">🚗 En Route</div>
+                                            <div class="detail-value">${fmtDate(dispatch.en_route_at)}</div>
+                                        </div>
+                                        <div class="detail-item">
+                                            <div class="detail-label">📍 Arrived</div>
+                                            <div class="detail-value">${fmtDate(dispatch.arrived_at)}</div>
+                                        </div>
+                                    </div>
+
+                                    <div class="info-row">
+                                        <div class="detail-item">
+                                            <div class="detail-label">🏁 Completed</div>
+                                            <div class="detail-value">${fmtDate(dispatch.completed_at)}</div>
+                                        </div>
+                                        <div class="detail-item">
+                                            <div class="detail-label">🔍 Validation</div>
+                                            <div class="detail-value" style="font-weight: 600; color: ${validityColor};">${validityLabel}</div>
+                                        </div>
+                                    </div>
+
+                                    ${dispatch.validation_notes ? `
+                                    <div class="info-row" style="grid-template-columns: 1fr;">
+                                        <div class="detail-item">
+                                            <div class="detail-label">📝 Officer Notes</div>
+                                            <div class="detail-value" style="white-space: pre-wrap; font-style: italic;">${dispatch.validation_notes}</div>
+                                        </div>
+                                    </div>
+                                    ` : ''}
+
+                                    ${evidenceMediaHtml}
+                                </div>
+                            `;
+                        }
+
                         // Combine all sections
-                        modalBody.innerHTML = reportInfo + timelineContent + mapContainer + mediaContent;
+                        modalBody.innerHTML = reportInfo + patrolResponseContent + timelineContent + mapContainer + mediaContent;
 
                         // Wire dynamic action buttons (dispatch) after render
                         modalBody.querySelectorAll('.dispatch-patrol-btn[data-dispatch-report]').forEach((btn) => {
@@ -4348,7 +4410,7 @@ function generatePDF(report) {
         selectElement.innerHTML = '<option value="">Loading officers...</option>';
         selectElement.disabled = true;
         
-        fetch('/dispatches/on-duty-officers')
+        fetch('/api/on-duty-officers')
             .then(res => res.json())
             .then(data => {
                 const officers = data.officers || [];
