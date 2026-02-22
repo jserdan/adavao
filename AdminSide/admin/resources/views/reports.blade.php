@@ -3097,8 +3097,14 @@ setInterval(updateSLATimers, 1000);
                             // Calculate response time from report creation to officer arrival (matches table column)
                             let responseTimeDisp = '—';
                             if (report.created_at) {
-                                const createdAt = new Date(report.created_at);
-                                const endTime = dispatch.arrived_at ? new Date(dispatch.arrived_at) : new Date();
+                                // Helper to prevent browser from adding +8 timezone offset to server time
+                                const parseServerTime = (ts) => {
+                                    if (!ts) return new Date();
+                                    const cleanTs = String(ts).replace('T', ' ').split('.')[0].replace('Z', '');
+                                    return new Date(cleanTs.replace(/-/g, '/'));
+                                };
+                                const createdAt = parseServerTime(report.created_at);
+                                const endTime = dispatch.arrived_at ? parseServerTime(dispatch.arrived_at) : new Date();
                                 const elapsedSec = Math.floor((endTime - createdAt) / 1000);
                                 const h = Math.floor(elapsedSec / 3600);
                                 const m = Math.floor((elapsedSec % 3600) / 60);
