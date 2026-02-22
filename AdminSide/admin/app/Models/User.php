@@ -135,6 +135,11 @@ class User extends Authenticatable
         return $this->hasOne(PoliceOfficer::class, 'user_id', 'id');
     }
 
+    public function patrolDispatches()
+    {
+        return $this->hasMany(PatrolDispatch::class, 'patrol_officer_id', 'id');
+    }
+
     /**
      * Check if user has a specific role
      * Uses the Roles RBAC table if populated, falls back to legacy role column

@@ -160,7 +160,10 @@ export default function PatrolChatScreen() {
             const data = await response.json();
             if (data.success) {
                 setMessages(prev => {
-                    const newData = data.data || [];
+                    // Sort descending from API to ascending (oldest first)
+                    const newData = (data.data || []).sort((a: any, b: any) =>
+                        new Date(a.sent_at).getTime() - new Date(b.sent_at).getTime()
+                    );
                     if (prev.length === newData.length && prev.length > 0) {
                         const lastOld = prev[prev.length - 1]?.message_id;
                         const lastNew = newData[newData.length - 1]?.message_id;
@@ -172,7 +175,7 @@ export default function PatrolChatScreen() {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ userId, otherUserId: contactId }),
-                }).catch(() => {});
+                }).catch(() => { });
             }
         } catch (error) {
             console.error('Error loading messages:', error);

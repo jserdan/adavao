@@ -445,20 +445,23 @@ const Login = () => {
       inactivityManager.start();
     }
 
-    // Role-based redirect (no setTimeout to avoid Promise not resolving)
+    // Role-based redirect
     if (effectiveRole === 'patrol_officer') {
       console.log('🚓 Patrol officer detected, redirecting to patrol dashboard');
-      // Initialize push notifications for patrol officers
       try {
         const { initializePushNotifications } = await import('../../services/pushNotificationService');
         await initializePushNotifications(user.id);
       } catch (error) {
         console.error('Failed to initialize push notifications:', error);
       }
-      router.replace('/(patrol)/dashboard' as any);
+      setTimeout(() => {
+        router.replace('/(patrol)/dashboard' as any);
+      }, 150);
     } else {
       console.log('🚀 Navigating to /(tabs) (home)...');
-      router.replace('/(tabs)');
+      setTimeout(() => {
+        router.replace('/(tabs)');
+      }, 150);
     }
   };
 

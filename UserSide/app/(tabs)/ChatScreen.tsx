@@ -97,10 +97,10 @@ const ChatScreen = () => {
             const response = await messageService.getMessages(parseInt(user.id), parseInt(otherUserId));
 
             if (response.success) {
-                // Sort messages by timestamp ascending (oldest first)
+                // Sort messages by timestamp descending (newest first)
                 // This ensures newest appears at bottom when FlatList is inverted
                 const sortedMessages = response.data.sort((a: any, b: any) =>
-                    new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+                    new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
                 );
                 // Only update if messages actually changed to prevent unnecessary re-renders
                 setMessages(prev => {
@@ -316,7 +316,7 @@ const ChatScreen = () => {
             <View style={localStyles.container}>
                 {/* Header */}
                 <View style={localStyles.header}>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                         onPress={() => router.push('/chatlist')}
                         style={localStyles.backButton}
                     >

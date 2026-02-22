@@ -45,7 +45,8 @@ export default function DispatchDetails() {
     const [validationNotes, setValidationNotes] = useState('');
     const [showVerificationModal, setShowVerificationModal] = useState(false);
     const [verifyingAs, setVerifyingAs] = useState<'valid' | 'invalid' | null>(null);
-    const [evidenceImage, setEvidenceImage] = useState<ImagePicker.ImagePickerAsset | null>(null);
+    const [selectedPhotoEvidence, setSelectedPhotoEvidence] = useState<ImagePicker.ImagePickerAsset | null>(null);
+    const [selectedVideoEvidence, setSelectedVideoEvidence] = useState<ImagePicker.ImagePickerAsset | null>(null);
 
     useEffect(() => {
         loadUserData();
@@ -157,38 +158,57 @@ export default function DispatchDetails() {
         }
     };
 
-    const pickEvidence = async () => {
-        try {
-            const result = await ImagePicker.launchCameraAsync({
-                mediaTypes: ['images', 'videos'],
-                quality: 0.7,
-                allowsEditing: false,
-            });
-            if (!result.canceled && result.assets && result.assets.length > 0) {
-                setEvidenceImage(result.assets[0]);
+    const pickEvidence = async (kind: 'photo' | 'video') => {
+        const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+        if (!permissionResult.granted) {
+            Alert.alert('Permission Required', 'Please grant access to your media library to upload evidence.');
+            return;
+        }
+
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: kind === 'photo' ? ['images'] : ['videos'],
+            allowsEditing: kind === 'photo',
+            quality: 1,
+        });
+
+        if (!result.canceled && result.assets && result.assets[0]) {
+            const asset = result.assets[0];
+
+            const maxSizeInBytes = 25 * 1024 * 1024;
+            if (asset.fileSize && asset.fileSize > maxSizeInBytes) {
+                Alert.alert('File Too Large', 'Your file is too big. Please select a file smaller than 25MB.');
+                return;
             }
-        } catch {
-            // Fallback to gallery if camera fails
-            try {
-                const result = await ImagePicker.launchImageLibraryAsync({
-                    mediaTypes: ['images', 'videos'],
-                    quality: 0.7,
-                    allowsEditing: false,
-                });
-                if (!result.canceled && result.assets && result.assets.length > 0) {
-                    setEvidenceImage(result.assets[0]);
-                }
-            } catch {
-                Alert.alert('Error', 'Failed to open camera or gallery');
+
+            if (kind === 'photo') {
+                setSelectedPhotoEvidence(asset);
+                setSelectedVideoEvidence(null);
+            } else {
+                setSelectedVideoEvidence(asset);
+                setSelectedPhotoEvidence(null);
             }
         }
+    };
+
+    const removePhotoEvidence = () => setSelectedPhotoEvidence(null);
+    const removeVideoEvidence = () => setSelectedVideoEvidence(null);
+
+    const formatBytes = (bytes?: number) => {
+        if (!bytes || bytes <= 0) return 'Unknown size';
+        const units = ['B', 'KB', 'MB', 'GB'];
+        const exp = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+        const value = bytes / Math.pow(1024, exp);
+        return `${value.toFixed(value >= 10 || exp === 0 ? 0 : 1)} ${units[exp]}`;
     };
 
     const verifyReport = async (isValid: boolean) => {
         if (!dispatchId || !userId) return;
 
+        const evidenceAsset = selectedPhotoEvidence || selectedVideoEvidence;
+
         // Require evidence photo for verification
-        if (!evidenceImage) {
+        if (!evidenceAsset) {
             Alert.alert('Evidence Required', 'Please attach a photo or video as evidence before verifying.');
             return;
         }
@@ -200,11 +220,17 @@ export default function DispatchDetails() {
             formData.append('isValid', String(isValid));
             formData.append('validationNotes', validationNotes.trim() || '');
 
-            if (evidenceImage) {
-                const uri = evidenceImage.uri;
-                const filename = uri.split('/').pop() || 'evidence.jpg';
+            if (evidenceAsset) {
+                const uri = evidenceAsset.uri;
+                let filename = evidenceAsset.fileName || uri.split('/').pop() || 'evidence.jpg';
+                if (!evidenceAsset.fileName && selectedVideoEvidence) {
+                    filename = uri.split('/').pop() || 'evidence.mp4';
+                }
                 const match = /\.([\w]+)$/.exec(filename);
-                const type = match ? `image/${match[1]}` : 'image/jpeg';
+                let type = match ? `image/${match[1]}` : 'image/jpeg';
+                if (selectedVideoEvidence) {
+                    type = match ? `video/${match[1]}` : 'video/mp4';
+                }
                 formData.append('evidence', { uri, name: filename, type } as any);
             }
 
@@ -228,7 +254,8 @@ export default function DispatchDetails() {
         } finally {
             setActionLoading(false);
             setShowVerificationModal(false);
-            setEvidenceImage(null);
+            setSelectedPhotoEvidence(null);
+            setSelectedVideoEvidence(null);
         }
     };
 
@@ -311,21 +338,64 @@ export default function DispatchDetails() {
                         </Text>
 
                         {/* Evidence Photo/Video Picker */}
-                        <TouchableOpacity style={styles.evidencePickerButton} onPress={pickEvidence}>
-                            {evidenceImage ? (
-                                <View style={styles.evidencePreviewContainer}>
-                                    <Image source={{ uri: evidenceImage.uri }} style={styles.evidencePreview} />
-                                    <Text style={styles.evidenceChangeText}>Tap to change</Text>
-                                </View>
-                            ) : (
-                                <View style={styles.evidencePlaceholder}>
-                                    <Ionicons name="camera" size={32} color={COLORS.textMuted} />
-                                    <Text style={styles.evidencePlaceholderText}>Take Photo / Video Evidence *</Text>
-                                    <Text style={{ fontSize: fontSize.xs, color: COLORS.danger }}>Required</Text>
+                        <View style={{ width: '100%', marginBottom: spacing.lg }}>
+                            <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: COLORS.textPrimary, marginBottom: spacing.xs }}>
+                                Evidence (Photo or Video) <Text style={{ color: COLORS.danger }}>*</Text>
+                            </Text>
+
+                            <View style={{ flexDirection: 'row', gap: 12, marginBottom: spacing.sm }}>
+                                <TouchableOpacity style={styles.mediaButton} onPress={() => pickEvidence('photo')}>
+                                    <Ionicons name="image-outline" size={24} color={COLORS.primary} />
+                                    <Text style={styles.mediaButtonText}>Select Photo</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={styles.mediaButton} onPress={() => pickEvidence('video')}>
+                                    <Ionicons name="videocam-outline" size={24} color={COLORS.primary} />
+                                    <Text style={styles.mediaButtonText}>Select Video</Text>
+                                </TouchableOpacity>
+                            </View>
+
+                            {(selectedPhotoEvidence || selectedVideoEvidence) && (
+                                <View style={{ marginTop: spacing.sm }}>
+                                    {selectedPhotoEvidence && (
+                                        <View style={styles.mediaPreviewContainer}>
+                                            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
+                                                <View style={styles.mediaThumbnail}>
+                                                    <Image source={{ uri: selectedPhotoEvidence.uri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                                                </View>
+                                                <View style={{ flex: 1 }}>
+                                                    <Text style={styles.mediaName} numberOfLines={1}>{selectedPhotoEvidence.fileName || 'Selected Photo'}</Text>
+                                                    <Text style={styles.mediaSize}>{formatBytes(selectedPhotoEvidence.fileSize)}</Text>
+                                                </View>
+                                            </View>
+                                            <TouchableOpacity onPress={removePhotoEvidence} style={{ padding: spacing.sm }}>
+                                                <Ionicons name="close-circle" size={24} color={COLORS.danger} />
+                                            </TouchableOpacity>
+                                        </View>
+                                    )}
+
+                                    {selectedVideoEvidence && (
+                                        <View style={styles.mediaPreviewContainer}>
+                                            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
+                                                <View style={[styles.mediaThumbnail, { justifyContent: 'center', alignItems: 'center' }]}>
+                                                    <Ionicons name="videocam" size={32} color={COLORS.primary} />
+                                                </View>
+                                                <View style={{ flex: 1 }}>
+                                                    <Text style={styles.mediaName} numberOfLines={1}>{selectedVideoEvidence.fileName || 'Selected Video'}</Text>
+                                                    <Text style={styles.mediaSize}>{formatBytes(selectedVideoEvidence.fileSize)}</Text>
+                                                </View>
+                                            </View>
+                                            <TouchableOpacity onPress={removeVideoEvidence} style={{ padding: spacing.sm }}>
+                                                <Ionicons name="close-circle" size={24} color={COLORS.danger} />
+                                            </TouchableOpacity>
+                                        </View>
+                                    )}
                                 </View>
                             )}
-                        </TouchableOpacity>
+                        </View>
 
+                        <Text style={{ fontSize: fontSize.md, fontWeight: '600', color: COLORS.textPrimary, marginBottom: spacing.xs, alignSelf: 'flex-start' }}>
+                            Description
+                        </Text>
                         <TextInput
                             style={styles.notesInput}
                             placeholder="Add verification notes (optional)"
@@ -335,13 +405,13 @@ export default function DispatchDetails() {
                             numberOfLines={3}
                         />
                         <View style={styles.modalButtons}>
-                            <TouchableOpacity style={styles.modalCancelButton} onPress={() => { setShowVerificationModal(false); setVerifyingAs(null); setEvidenceImage(null); }}>
+                            <TouchableOpacity style={styles.modalCancelButton} onPress={() => { setShowVerificationModal(false); setVerifyingAs(null); setSelectedPhotoEvidence(null); setSelectedVideoEvidence(null); }}>
                                 <Text style={styles.modalCancelText}>Cancel</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
-                                style={[styles.modalConfirmButton, { backgroundColor: verifyingAs === 'valid' ? COLORS.success : COLORS.danger, opacity: evidenceImage ? 1 : 0.5 }]}
+                                style={[styles.modalConfirmButton, { backgroundColor: verifyingAs === 'valid' ? COLORS.success : COLORS.danger, opacity: (selectedPhotoEvidence || selectedVideoEvidence) ? 1 : 0.5 }]}
                                 onPress={() => verifyReport(verifyingAs === 'valid')}
-                                disabled={actionLoading || !evidenceImage}
+                                disabled={actionLoading || (!selectedPhotoEvidence && !selectedVideoEvidence)}
                             >
                                 {actionLoading ? <ActivityIndicator color={COLORS.white} size="small" /> : <Text style={styles.modalConfirmText}>Confirm</Text>}
                             </TouchableOpacity>
@@ -583,13 +653,13 @@ const styles = StyleSheet.create({
     verifyValidButton: { backgroundColor: COLORS.success },
     verifyInvalidButton: { backgroundColor: COLORS.danger },
     verifyButtonText: { fontSize: fontSize.md, fontWeight: 'bold', color: COLORS.white, marginTop: spacing.xs },
-    evidencePickerButton: { borderWidth: 2, borderColor: COLORS.border, borderStyle: 'dashed', borderRadius: borderRadius.md, padding: spacing.md, marginBottom: spacing.lg, alignItems: 'center' },
-    evidencePreviewContainer: { alignItems: 'center' },
-    evidencePreview: { width: 200, height: 150, borderRadius: borderRadius.md, marginBottom: spacing.xs },
-    evidenceChangeText: { fontSize: fontSize.xs, color: COLORS.primary, fontWeight: '600' },
-    evidencePlaceholder: { alignItems: 'center', paddingVertical: spacing.md },
-    evidencePlaceholderText: { fontSize: fontSize.sm, color: COLORS.textMuted, marginTop: spacing.xs },
     verifyButtonSubtext: { fontSize: fontSize.sm, color: 'rgba(255,255,255,0.8)' },
+    mediaButton: { flex: 1, padding: spacing.md, backgroundColor: '#f8f9fa', borderRadius: borderRadius.md, borderWidth: 1, borderColor: COLORS.border, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: spacing.sm },
+    mediaButtonText: { fontSize: fontSize.md, fontWeight: '600', color: COLORS.primary },
+    mediaPreviewContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#f8f9fa', borderRadius: borderRadius.md, padding: spacing.sm, borderWidth: 1, borderColor: COLORS.border },
+    mediaThumbnail: { width: 60, height: 60, borderRadius: borderRadius.sm, overflow: 'hidden', marginRight: spacing.md, backgroundColor: '#e9ecef', borderWidth: 1, borderColor: COLORS.border },
+    mediaName: { fontSize: fontSize.sm, fontWeight: '600', color: COLORS.textPrimary, marginBottom: 2 },
+    mediaSize: { fontSize: fontSize.xs, color: COLORS.textSecondary },
     completedBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#D1FAE5', padding: spacing.lg, borderRadius: borderRadius.lg, marginTop: spacing.lg, gap: spacing.sm },
     completedText: { fontSize: fontSize.md, fontWeight: '600', color: COLORS.success },
     modalOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: spacing.lg },

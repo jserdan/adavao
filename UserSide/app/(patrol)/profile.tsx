@@ -173,27 +173,18 @@ export default function PatrolProfile() {
                 }).catch(err => console.warn('Server logout failed:', err));
             }
 
-            await AsyncStorage.multiRemove([
-                'userData',
-                'userToken',
-                'pushToken',
-                'lastNotificationCheck',
-                'cachedNotifications',
-                'patrolDutyStatus',
-                'inactivityLogout'
-            ]);
+            // Clear local storage thoroughly to prevent sticky Google sessions
+            await AsyncStorage.clear();
 
             // Navigate directly to login screen
-            // Dismiss patrol stack and go to login
-            while (router.canGoBack()) {
-                router.back();
+            if (router.dismissAll) {
+                router.dismissAll();
             }
             router.replace('/(tabs)/login');
         } catch (error) {
             console.error('Error logging out:', error);
-            // Dismiss patrol stack and go to login
-            while (router.canGoBack()) {
-                router.back();
+            if (router.dismissAll) {
+                router.dismissAll();
             }
             router.replace('/(tabs)/login');
         }

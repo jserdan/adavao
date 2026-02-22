@@ -332,12 +332,12 @@ export default function UserDashboard() {
     useEffect(() => {
         if (isLoggedIn) {
             fetchAnnouncements();
-            
+
             // Auto-refresh announcements every 2 seconds (silent)
             const interval = setInterval(() => {
                 fetchAnnouncements();
             }, 2000);
-            
+
             return () => clearInterval(interval);
         }
     }, [isLoggedIn]);
@@ -365,7 +365,7 @@ export default function UserDashboard() {
         try {
             // Stop inactivity manager
             inactivityManager.stop();
-            
+
             // Stop server warmup pings
             stopServerWarmup();
 
@@ -388,18 +388,11 @@ export default function UserDashboard() {
                 }).catch(err => console.warn('Server logout failed:', err));
             }
 
-            // Clear local storage
+            // Clear local storage thoroughly to prevent sticky Google sessions
             const savedEmail = await AsyncStorage.getItem('rememberedEmail');
-            await AsyncStorage.multiRemove([
-                'userData',
-                'userToken',
-                'pushToken',
-                'lastNotificationCheck',
-                'cachedNotifications',
-                'inactivityLogout'
-            ]);
-            if (!savedEmail) {
-                await AsyncStorage.removeItem('rememberedEmail');
+            await AsyncStorage.clear();
+            if (savedEmail) {
+                await AsyncStorage.setItem('rememberedEmail', savedEmail);
             }
 
             // Clear context state
@@ -409,7 +402,7 @@ export default function UserDashboard() {
             setFlagStatus(null);
             setFlagNotification(null);
             setNotifications([]);
-            
+
             router.replace('/(tabs)/login');
         } catch (error) {
             console.error('Error logging out:', error);
@@ -466,8 +459,8 @@ export default function UserDashboard() {
                             </View>
                             <Text style={styles.sideMenuUserName}>{userName}</Text>
                         </View>
-                        
-                        <TouchableOpacity 
+
+                        <TouchableOpacity
                             style={styles.sideMenuItem}
                             onPress={() => {
                                 setShowSideMenu(false);
@@ -477,8 +470,8 @@ export default function UserDashboard() {
                             <Ionicons name="person-outline" size={22} color={COLORS.textPrimary} />
                             <Text style={styles.sideMenuItemText}>Profile</Text>
                         </TouchableOpacity>
-                        
-                        <TouchableOpacity 
+
+                        <TouchableOpacity
                             style={styles.sideMenuItem}
                             onPress={() => {
                                 setShowSideMenu(false);
@@ -573,8 +566,8 @@ export default function UserDashboard() {
                         </View>
                     ) : (
                         announcements.map((announcement) => (
-                            <TouchableOpacity 
-                                key={announcement.id} 
+                            <TouchableOpacity
+                                key={announcement.id}
                                 style={styles.announcementCard}
                                 onPress={() => handleAnnouncementPress(announcement)}
                             >
@@ -616,7 +609,7 @@ export default function UserDashboard() {
                                     <Text style={styles.guidelineText}>{guideline}</Text>
                                 </View>
                             ))}
-                            <TouchableOpacity 
+                            <TouchableOpacity
                                 style={styles.viewGuidelinesBtn}
                                 onPress={() => router.push('/guidelines')}
                             >
@@ -633,8 +626,8 @@ export default function UserDashboard() {
 
             {/* Bottom Navigation */}
             <View style={styles.bottomNav}>
-                <TouchableOpacity 
-                    style={styles.navItem} 
+                <TouchableOpacity
+                    style={styles.navItem}
                     onPress={() => router.push('/chatlist')}
                 >
                     <View style={{ position: 'relative' }}>
@@ -656,7 +649,7 @@ export default function UserDashboard() {
                 </TouchableOpacity>
 
                 {/* Submit Report - Center Button */}
-                <TouchableOpacity 
+                <TouchableOpacity
                     style={styles.navItemCenter}
                     onPress={() => {
                         if (!flagStatus) {
@@ -674,7 +667,7 @@ export default function UserDashboard() {
                     <Text style={styles.navTextCenter}>Submit Report</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity 
+                <TouchableOpacity
                     style={styles.navItem}
                     onPress={() => router.push('/history')}
                 >
@@ -682,7 +675,7 @@ export default function UserDashboard() {
                     <Text style={styles.navText}>History</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity 
+                <TouchableOpacity
                     style={styles.navItem}
                     onPress={() => router.push('/(tabs)/location')}
                 >
@@ -742,7 +735,7 @@ export default function UserDashboard() {
                                 </View>
                                 <ScrollView style={styles.announcementModalBody}>
                                     <Text style={styles.announcementModalText}>{selectedAnnouncement.content}</Text>
-                                    
+
                                     {/* Attachments */}
                                     {selectedAnnouncement.attachments && selectedAnnouncement.attachments.length > 0 && (
                                         <View style={styles.attachmentsSection}>
@@ -751,10 +744,10 @@ export default function UserDashboard() {
                                             </Text>
                                             {selectedAnnouncement.attachments.map((attachment, index) => {
                                                 const isImage = attachment.match(/\.(jpg|jpeg|png|gif|webp)$/i);
-                                                
+
                                                 if (isImage) {
                                                     return (
-                                                        <TouchableOpacity 
+                                                        <TouchableOpacity
                                                             key={index}
                                                             onPress={() => Linking.openURL(attachment)}
                                                             style={styles.imageAttachmentContainer}
@@ -770,18 +763,18 @@ export default function UserDashboard() {
                                                         </TouchableOpacity>
                                                     );
                                                 }
-                                                
+
                                                 return (
-                                                    <TouchableOpacity 
-                                                        key={index} 
+                                                    <TouchableOpacity
+                                                        key={index}
                                                         style={styles.attachmentItem}
                                                         onPress={() => Linking.openURL(attachment)}
                                                     >
                                                         <View style={styles.attachmentIcon}>
-                                                            <Ionicons 
+                                                            <Ionicons
                                                                 name="document-outline"
-                                                                size={20} 
-                                                                color={COLORS.primary} 
+                                                                size={20}
+                                                                color={COLORS.primary}
                                                             />
                                                         </View>
                                                         <Text style={styles.attachmentName} numberOfLines={1}>
@@ -796,7 +789,7 @@ export default function UserDashboard() {
                                 </ScrollView>
                             </>
                         )}
-                        <TouchableOpacity 
+                        <TouchableOpacity
                             style={styles.announcementModalClose}
                             onPress={() => setShowAnnouncementModal(false)}
                         >
@@ -829,8 +822,8 @@ export default function UserDashboard() {
                                 </View>
                             ) : (
                                 allAnnouncements.map((announcement) => (
-                                    <TouchableOpacity 
-                                        key={announcement.id} 
+                                    <TouchableOpacity
+                                        key={announcement.id}
                                         style={styles.allAnnouncementItem}
                                         onPress={() => {
                                             setShowAllAnnouncements(false);
