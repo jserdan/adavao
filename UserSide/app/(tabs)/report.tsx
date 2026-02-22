@@ -372,8 +372,8 @@ export default function ReportCrime() {
     const getCrimeGuidelines = (crimeType: string): string[] => {
         // Evidence requirements for different crime types
         const EVIDENCE_OPTIONAL_CRIMES = [
-            'Threats/Intimidation', 
-            'Noise Complaint', 
+            'Threats/Intimidation',
+            'Noise Complaint',
             'Loitering/Suspicious Activity',
             'Public Intoxication',
             'Online Threats',
@@ -383,22 +383,22 @@ export default function ReportCrime() {
             'Others',
             'Unidentified Incident'
         ];
-        
+
         const requiresEvidence = !EVIDENCE_OPTIONAL_CRIMES.map(c => c.toLowerCase()).includes(crimeType.toLowerCase());
-        
+
         const baseGuidelines = [
             'Provide accurate and truthful information',
             'Include specific details about time and location',
             'Describe suspects or vehicles if applicable',
             'Do not exaggerate or fabricate details',
         ];
-        
+
         if (requiresEvidence) {
             baseGuidelines.push('Photo or video evidence is required for this crime type');
         } else {
             baseGuidelines.push('Photo or video evidence is optional but recommended');
         }
-        
+
         // Add crime-specific guidelines
         const specificGuidelines: Record<string, string[]> = {
             'Physical Assault': ['Note any visible injuries', 'Identify witnesses if possible'],
@@ -410,7 +410,7 @@ export default function ReportCrime() {
             'Fire Emergency': ['Call 911 first for emergencies', 'Note if anyone is trapped'],
             'Medical Emergency': ['Call 911 first for emergencies', 'Provide exact location'],
         };
-        
+
         return [...baseGuidelines, ...(specificGuidelines[crimeType] || [])];
     };
 
@@ -514,9 +514,27 @@ export default function ReportCrime() {
                 const { status } = await Location.requestForegroundPermissionsAsync();
 
                 if (status === 'granted') {
-                    const location = await Location.getCurrentPositionAsync({
-                        accuracy: Location.Accuracy.High
+                    // Start a 10-second timeout race
+                    const timeoutPromise = new Promise((_, reject) => {
+                        setTimeout(() => reject(new Error('Location fetch timed out')), 10000);
                     });
+
+                    let location;
+                    try {
+                        location = await Promise.race([
+                            Location.getCurrentPositionAsync({
+                                accuracy: Location.Accuracy.Balanced
+                            }),
+                            timeoutPromise
+                        ]) as Location.LocationObject;
+                    } catch (highAccuracyError) {
+                        console.log('⚠️ High accuracy fetch failed or timed out, trying last known position...');
+                        // Fallback to last known position
+                        location = await Location.getLastKnownPositionAsync();
+                        if (!location) {
+                            throw new Error('Could not determine location even with fallback');
+                        }
+                    }
 
                     const { latitude, longitude } = location.coords;
                     console.log(`📍 Auto-pinned location: ${latitude}, ${longitude}`);
@@ -782,8 +800,8 @@ export default function ReportCrime() {
         // ⚠️ Evidence validation - Required for most crime types
         // These subcategories don't require mandatory evidence
         const EVIDENCE_OPTIONAL_CRIMES = [
-            'Threats/Intimidation', 
-            'Noise Complaint', 
+            'Threats/Intimidation',
+            'Noise Complaint',
             'Loitering/Suspicious Activity',
             'Public Intoxication',
             'Online Threats',
@@ -1037,37 +1055,37 @@ export default function ReportCrime() {
 
             if (error instanceof Error) {
                 errorMessage = error.message;
-                
+
                 // Customize title based on error type
-                if (errorMessage.toLowerCase().includes('evidence') || 
-                    errorMessage.toLowerCase().includes('photo') || 
+                if (errorMessage.toLowerCase().includes('evidence') ||
+                    errorMessage.toLowerCase().includes('photo') ||
                     errorMessage.toLowerCase().includes('video')) {
                     errorTitle = 'Evidence Required';
-                } else if (errorMessage.toLowerCase().includes('connection') || 
-                           errorMessage.toLowerCase().includes('network') ||
-                           errorMessage.toLowerCase().includes('timeout')) {
+                } else if (errorMessage.toLowerCase().includes('connection') ||
+                    errorMessage.toLowerCase().includes('network') ||
+                    errorMessage.toLowerCase().includes('timeout')) {
                     errorTitle = 'Connection Error';
-                } else if (errorMessage.toLowerCase().includes('authorized') || 
-                           errorMessage.toLowerCase().includes('log in')) {
+                } else if (errorMessage.toLowerCase().includes('authorized') ||
+                    errorMessage.toLowerCase().includes('log in')) {
                     errorTitle = 'Authentication Required';
-                } else if (errorMessage.toLowerCase().includes('too large') || 
-                           errorMessage.toLowerCase().includes('file size')) {
+                } else if (errorMessage.toLowerCase().includes('too large') ||
+                    errorMessage.toLowerCase().includes('file size')) {
                     errorTitle = 'File Too Large';
                 } else if (errorMessage.toLowerCase().includes('server')) {
                     errorTitle = 'Server Error';
-                } else if (errorMessage.toLowerCase().includes('missing') || 
-                           errorMessage.toLowerCase().includes('required')) {
+                } else if (errorMessage.toLowerCase().includes('missing') ||
+                    errorMessage.toLowerCase().includes('required')) {
                     errorTitle = 'Missing Information';
                 }
             }
 
             Alert.alert(
-                errorTitle, 
+                errorTitle,
                 errorMessage,
                 [
-                    { 
-                        text: 'OK', 
-                        style: 'default' 
+                    {
+                        text: 'OK',
+                        style: 'default'
                     }
                 ],
                 { cancelable: true }
@@ -1122,12 +1140,12 @@ export default function ReportCrime() {
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, marginTop: 8 }}>
                     <Text style={styles.subheading}>Select the type of </Text>
                     {isAnonymous ? (
-                        <TouchableOpacity onPress={() => setShowAllGuidelinesModal(true)}>
+                        <TouchableOpacity onPress={(e) => { e.preventDefault(); e.stopPropagation(); setShowAllGuidelinesModal(true); }} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
                             <Text style={[styles.subheading, { color: '#0066cc', textDecorationLine: 'underline' }]}>crimes</Text>
                         </TouchableOpacity>
                     ) : (
                         <Link href={{ pathname: "/guidelines", params: { scrollToSection: "crime-types" } }} asChild>
-                            <TouchableOpacity>
+                            <TouchableOpacity hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
                                 <Text style={[styles.subheading, { color: '#0066cc', textDecorationLine: 'underline' }]}>crimes</Text>
                             </TouchableOpacity>
                         </Link>
@@ -1303,8 +1321,8 @@ export default function ReportCrime() {
                         <Text style={{ fontSize: 14, fontWeight: '600', color: '#1D3557', marginBottom: 8 }}>
                             💡 Quick fill suggestions (tap to use):
                         </Text>
-                        <ScrollView 
-                            horizontal 
+                        <ScrollView
+                            horizontal
                             showsHorizontalScrollIndicator={false}
                             style={{ marginHorizontal: -16 }}
                             contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}
@@ -1351,19 +1369,19 @@ export default function ReportCrime() {
                     <Text style={{ color: '#E63946', fontWeight: '700', fontSize: 16 }}> *</Text>
                 </View>
                 {/* Evidence Warning */}
-                <View style={{ 
-                    backgroundColor: '#fff3cd', 
-                    borderLeftWidth: 4, 
-                    borderLeftColor: '#ffc107', 
-                    padding: 10, 
-                    borderRadius: 6, 
-                    marginBottom: 12 
+                <View style={{
+                    backgroundColor: '#fff3cd',
+                    borderLeftWidth: 4,
+                    borderLeftColor: '#ffc107',
+                    padding: 10,
+                    borderRadius: 6,
+                    marginBottom: 12
                 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
                         <Ionicons name="warning" size={16} color="#856404" style={{ marginRight: 6, marginTop: 2 }} />
                         <Text style={{ fontSize: 12, color: '#856404', flex: 1, lineHeight: 18 }}>
-                            <Text style={{ fontWeight: '700' }}>Important:</Text> Only attach relevant and appropriate evidence. 
-                            Do not upload sensitive or explicit content, including nudity, sexual content, or graphic violence 
+                            <Text style={{ fontWeight: '700' }}>Important:</Text> Only attach relevant and appropriate evidence.
+                            Do not upload sensitive or explicit content, including nudity, sexual content, or graphic violence
                             unless directly related to the crime being reported.
                         </Text>
                     </View>
@@ -1832,9 +1850,9 @@ export default function ReportCrime() {
                 <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 }}>
                     <View style={{ backgroundColor: 'white', borderRadius: 16, padding: 0, maxHeight: '80%', overflow: 'hidden' }}>
                         {/* Header */}
-                        <View style={{ 
-                            backgroundColor: '#1D3557', 
-                            paddingHorizontal: 20, 
+                        <View style={{
+                            backgroundColor: '#1D3557',
+                            paddingHorizontal: 20,
                             paddingVertical: 16,
                             flexDirection: 'row',
                             justifyContent: 'space-between',
@@ -1853,10 +1871,10 @@ export default function ReportCrime() {
 
                         <ScrollView style={{ paddingHorizontal: 20, paddingVertical: 16 }}>
                             {/* Crime Type Badge */}
-                            <View style={{ 
-                                backgroundColor: '#E3F2FD', 
-                                paddingHorizontal: 14, 
-                                paddingVertical: 8, 
+                            <View style={{
+                                backgroundColor: '#E3F2FD',
+                                paddingHorizontal: 14,
+                                paddingVertical: 8,
                                 borderRadius: 20,
                                 alignSelf: 'flex-start',
                                 marginBottom: 16
@@ -1867,10 +1885,10 @@ export default function ReportCrime() {
                             </View>
 
                             {/* Anonymous Warning */}
-                            <View style={{ 
-                                backgroundColor: '#fff3cd', 
-                                padding: 14, 
-                                borderRadius: 10, 
+                            <View style={{
+                                backgroundColor: '#fff3cd',
+                                padding: 14,
+                                borderRadius: 10,
                                 marginBottom: 20,
                                 borderLeftWidth: 4,
                                 borderLeftColor: '#ffc107'
@@ -1892,13 +1910,13 @@ export default function ReportCrime() {
                             <Text style={{ fontSize: 15, fontWeight: '700', color: '#1D3557', marginBottom: 12 }}>
                                 Guidelines for "{selectedCrimeForGuidelines}":
                             </Text>
-                            
+
                             {getCrimeGuidelines(selectedCrimeForGuidelines).map((guideline, index) => (
-                                <View 
-                                    key={index} 
-                                    style={{ 
-                                        flexDirection: 'row', 
-                                        alignItems: 'flex-start', 
+                                <View
+                                    key={index}
+                                    style={{
+                                        flexDirection: 'row',
+                                        alignItems: 'flex-start',
                                         marginBottom: 10,
                                         backgroundColor: index % 2 === 0 ? '#f8f9fa' : '#fff',
                                         padding: 12,
@@ -1923,10 +1941,10 @@ export default function ReportCrime() {
                             ))}
 
                             {/* False Report Warning */}
-                            <View style={{ 
-                                backgroundColor: '#fee2e2', 
-                                padding: 14, 
-                                borderRadius: 10, 
+                            <View style={{
+                                backgroundColor: '#fee2e2',
+                                padding: 14,
+                                borderRadius: 10,
                                 marginTop: 16,
                                 marginBottom: 8,
                                 borderLeftWidth: 4,
@@ -1949,10 +1967,10 @@ export default function ReportCrime() {
                         {/* Close Button */}
                         <View style={{ paddingHorizontal: 20, paddingBottom: 20, paddingTop: 8 }}>
                             <TouchableOpacity
-                                style={{ 
-                                    backgroundColor: '#1D3557', 
-                                    paddingVertical: 14, 
-                                    borderRadius: 10, 
+                                style={{
+                                    backgroundColor: '#1D3557',
+                                    paddingVertical: 14,
+                                    borderRadius: 10,
                                     alignItems: 'center',
                                     shadowColor: '#1D3557',
                                     shadowOffset: { width: 0, height: 2 },
@@ -1979,9 +1997,9 @@ export default function ReportCrime() {
                 <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 }}>
                     <View style={{ backgroundColor: 'white', borderRadius: 16, padding: 0, maxHeight: '85%', overflow: 'hidden' }}>
                         {/* Header */}
-                        <View style={{ 
-                            backgroundColor: '#1D3557', 
-                            paddingHorizontal: 20, 
+                        <View style={{
+                            backgroundColor: '#1D3557',
+                            paddingHorizontal: 20,
                             paddingVertical: 16,
                             flexDirection: 'row',
                             justifyContent: 'space-between',
@@ -2000,10 +2018,10 @@ export default function ReportCrime() {
 
                         <ScrollView style={{ paddingHorizontal: 20, paddingVertical: 16 }}>
                             {/* General Guidelines */}
-                            <View style={{ 
-                                backgroundColor: '#E3F2FD', 
-                                padding: 14, 
-                                borderRadius: 10, 
+                            <View style={{
+                                backgroundColor: '#E3F2FD',
+                                padding: 14,
+                                borderRadius: 10,
                                 marginBottom: 16,
                                 borderLeftWidth: 4,
                                 borderLeftColor: '#1D3557'
@@ -2026,10 +2044,10 @@ export default function ReportCrime() {
                             </View>
 
                             {/* Evidence Requirements */}
-                            <View style={{ 
-                                backgroundColor: '#FFF3E0', 
-                                padding: 14, 
-                                borderRadius: 10, 
+                            <View style={{
+                                backgroundColor: '#FFF3E0',
+                                padding: 14,
+                                borderRadius: 10,
                                 marginBottom: 16,
                                 borderLeftWidth: 4,
                                 borderLeftColor: '#FF9800'
@@ -2082,10 +2100,10 @@ export default function ReportCrime() {
                             ))}
 
                             {/* Anonymous Warning */}
-                            <View style={{ 
-                                backgroundColor: '#fff3cd', 
-                                padding: 14, 
-                                borderRadius: 10, 
+                            <View style={{
+                                backgroundColor: '#fff3cd',
+                                padding: 14,
+                                borderRadius: 10,
                                 marginTop: 8,
                                 marginBottom: 8,
                                 borderLeftWidth: 4,
@@ -2105,10 +2123,10 @@ export default function ReportCrime() {
                             </View>
 
                             {/* False Report Warning */}
-                            <View style={{ 
-                                backgroundColor: '#fee2e2', 
-                                padding: 14, 
-                                borderRadius: 10, 
+                            <View style={{
+                                backgroundColor: '#fee2e2',
+                                padding: 14,
+                                borderRadius: 10,
                                 marginBottom: 8,
                                 borderLeftWidth: 4,
                                 borderLeftColor: '#dc2626'
@@ -2130,10 +2148,10 @@ export default function ReportCrime() {
                         {/* Close Button */}
                         <View style={{ paddingHorizontal: 20, paddingBottom: 20, paddingTop: 8 }}>
                             <TouchableOpacity
-                                style={{ 
-                                    backgroundColor: '#1D3557', 
-                                    paddingVertical: 14, 
-                                    borderRadius: 10, 
+                                style={{
+                                    backgroundColor: '#1D3557',
+                                    paddingVertical: 14,
+                                    borderRadius: 10,
                                     alignItems: 'center',
                                     shadowColor: '#1D3557',
                                     shadowOffset: { width: 0, height: 2 },

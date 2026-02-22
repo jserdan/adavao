@@ -1688,11 +1688,14 @@
                                         };
 
                                         if ($elapsedSeconds < $threeMinutes) {
+                                            $remainingSeconds = $threeMinutes - $elapsedSeconds;
                                             $timerClass = 'countdown';
+                                            $timerDisplay = $formatTime($remainingSeconds);
                                         } else {
+                                            $exceededSeconds = $elapsedSeconds - $threeMinutes;
                                             $timerClass = 'exceeded';
+                                            $timerDisplay = '+' . $formatTime($exceededSeconds);
                                         }
-                                        $timerDisplay = $formatTime($elapsedSeconds);
                                     @endphp
                                     <span class="sla-timer {{ $timerClass }}" 
                                           data-created-at="{{ $createdAt->timestamp }}"
@@ -1708,14 +1711,8 @@
                                         
                                         if ($isValid === 'checking_for_report_validity' || !$validatedAt) {
                                             // Still pending validation
-                                            $elapsedNow = time() - $createdAt->timestamp;
-                                            if ($elapsedNow >= 180) {
-                                                $ruleStatus = 'Exceeded';
-                                                $ruleClass = 'exceeded';
-                                            } else {
-                                                $ruleStatus = 'Pending';
-                                                $ruleClass = 'pending';
-                                            }
+                                            $ruleStatus = 'Pending';
+                                            $ruleClass = 'pending';
                                         } else {
                                             // Validated - check if within 3 minutes
                                             $validationTime = $createdAt->diffInSeconds($validatedAt);
@@ -2064,12 +2061,10 @@ window.updateValidity = function(reportId, isValid) {};
 window.closeModal = function() {};
 window.downloadModalAsPDF = function() {};
 
-window.serverClientTimeOffset = window.serverClientTimeOffset || (Math.floor(Date.now() / 1000) - {{ time() }});
-
 // Update Response Time timers in real-time
 function updateSLATimers() {
     const timers = document.querySelectorAll('.sla-timer');
-    const now = Math.floor(Date.now() / 1000) - window.serverClientTimeOffset;
+    const now = Math.floor(Date.now() / 1000);
     
     timers.forEach(timer => {
         const createdAt = parseInt(timer.getAttribute('data-created-at'));
@@ -2091,21 +2086,13 @@ function updateSLATimers() {
         }
 
         if (elapsedSeconds < threeMinutes) {
-            timer.textContent = formatTime(elapsedSeconds);
+            const remainingSeconds = threeMinutes - elapsedSeconds;
+            timer.textContent = formatTime(remainingSeconds);
             timer.className = 'sla-timer countdown';
         } else {
-            timer.textContent = formatTime(elapsedSeconds);
+            const exceededSeconds = elapsedSeconds - threeMinutes;
+            timer.textContent = '+' + formatTime(exceededSeconds);
             timer.className = 'sla-timer exceeded';
-            
-            // Auto update rule status if pending
-            const row = timer.closest('tr');
-            if (row) {
-                const ruleStatusSpan = row.querySelector('.rule-status.pending');
-                if (ruleStatusSpan && ruleStatusSpan.textContent.trim() === 'Pending') {
-                    ruleStatusSpan.textContent = 'Exceeded';
-                    ruleStatusSpan.className = 'rule-status exceeded';
-                }
-            }
         }
     });
 }
@@ -2214,33 +2201,27 @@ setInterval(updateSLATimers, 1000);
                             <div style="width:80px; height:80px; background:linear-gradient(135deg,#3b82f6 0%,#1d4ed8 100%); border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto 16px;">
                                 <span style="font-size:36px;">🚓</span>
                             </div>
-                            <h3 style="margin:0 0 8px; font-size:18px; color:#1f2937;">Dispatch Patrol Officer</h3>
+                            <h3 style="margin:0 0 8px; font-size:18px; color:#1f2937;">Dispatch to All Patrol Officers</h3>
                             <p style="margin:0 0 16px; color:#666; font-size:14px; line-height:1.5;">
-                                Select an on-duty patrol officer to investigate and respond.
+                                This dispatch will be broadcast to all patrol officers. Add a note to guide which officer should respond.
                             </p>
                             <input type="hidden" id="dispatch_report_id" />
-                            <div style="text-align:left; margin-bottom:12px;">
-                                <label for="dispatch_officer_id" style="display:block; font-size:13px; font-weight:600; color:#374151; margin-bottom:6px;">Select Officer</label>
-                                <select id="dispatch_officer_id" style="width:100%; padding:10px 12px; border:1px solid #d1d5db; border-radius:8px; font-size:14px; box-sizing:border-box;">
-                                    <option value="">Loading officers...</option>
-                                </select>
-                            </div>
                             <div style="text-align:left; margin-bottom:20px;">
                                 <label for="dispatch_notes" style="display:block; font-size:13px; font-weight:600; color:#374151; margin-bottom:6px;">Note to Patrol Officers</label>
                                 <textarea id="dispatch_notes" rows="3" placeholder="e.g. This report location is nearby Sta. Ana Police Station, Patrol 3 please respond..." style="width:100%; padding:10px 12px; border:1px solid #d1d5db; border-radius:8px; font-size:14px; resize:vertical; font-family:inherit; box-sizing:border-box;"></textarea>
                             </div>
                             <div style="display:flex; gap:12px; justify-content:center;">
                                 <button type="button" data-dispatch-cancel style="padding:12px 24px; background:#f3f4f6; border:none; border-radius:8px; cursor:pointer; font-size:14px; font-weight:500;">Cancel</button>
-                                <button type="button" data-dispatch-confirm style="padding:12px 24px; background:linear-gradient(135deg,#3b82f6 0%,#1d4ed8 100%); color:white; border:none; border-radius:8px; cursor:pointer; font-weight:600; font-size:14px; box-shadow:0 4px 12px rgba(59,130,246,0.3);">🚓 Dispatch Selected</button>
+                                <button type="button" data-dispatch-confirm style="padding:12px 24px; background:linear-gradient(135deg,#3b82f6 0%,#1d4ed8 100%); color:white; border:none; border-radius:8px; cursor:pointer; font-weight:600; font-size:14px; box-shadow:0 4px 12px rgba(59,130,246,0.3);">🚓 Dispatch Now</button>
                             </div>
                         </div>
                         <div id="dispatch-success" style="display:none;">
                             <div style="width:80px; height:80px; background:#dcfce7; border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto 16px;">
                                 <span style="font-size:36px;">✅</span>
                             </div>
-                            <h3 id="dispatch-success-title" style="margin:0 0 8px; font-size:18px; color:#16a34a;">Dispatch Sent!</h3>
-                            <p id="dispatch-success-msg" style="margin:0 0 24px; color:#666; font-size:14px; line-height:1.5;">
-                                The selected patrol officer has been notified.
+                            <h3 style="margin:0 0 8px; font-size:18px; color:#16a34a;">Dispatch Broadcast Sent!</h3>
+                            <p style="margin:0 0 24px; color:#666; font-size:14px; line-height:1.5;">
+                                All patrol officers have been notified. The assigned officer will accept and respond to this report.
                             </p>
                             <button type="button" data-dispatch-done style="padding:12px 24px; background:#16a34a; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:600; font-size:14px;">Done</button>
                         </div>
@@ -2266,7 +2247,7 @@ setInterval(updateSLATimers, 1000);
             modal.querySelector('[data-dispatch-cancel]')?.addEventListener('click', () => window.closeDispatchModal());
             modal.querySelector('[data-dispatch-close]')?.addEventListener('click', () => window.closeDispatchModal());
             modal.querySelector('[data-dispatch-done]')?.addEventListener('click', () => { window.closeDispatchModal(); location.reload(); });
-            modal.querySelector('[data-dispatch-confirm]')?.addEventListener('click', () => window.dispatchToSelectedPatrol());
+            modal.querySelector('[data-dispatch-confirm]')?.addEventListener('click', () => window.dispatchToNearestPatrol());
 
             return modal;
         };
@@ -2287,33 +2268,6 @@ setInterval(updateSLATimers, 1000);
             modal.querySelector('#dispatch-error')?.style && (modal.querySelector('#dispatch-error').style.display = 'none');
 
             modal.style.display = 'flex';
-            
-            // Fetch officers
-            const officerSelect = modal.querySelector('#dispatch_officer_id');
-            if (officerSelect) {
-                officerSelect.innerHTML = '<option value="">Loading officers...</option>';
-                officerSelect.disabled = true;
-                
-                fetch('/api/on-duty-officers')
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data.officers && data.officers.length > 0) {
-                            officerSelect.innerHTML = '<option value="">Select an officer...</option>';
-                            data.officers.forEach(off => {
-                                const option = document.createElement('option');
-                                option.value = off.id;
-                                option.textContent = `${off.name} - ${off.station_name || 'No Station'} (${off.has_recent_location ? 'Active' : 'Idle'})`;
-                                officerSelect.appendChild(option);
-                            });
-                            officerSelect.disabled = false;
-                        } else {
-                            officerSelect.innerHTML = '<option value="">No officers on duty</option>';
-                        }
-                    })
-                    .catch(() => {
-                        officerSelect.innerHTML = '<option value="">Failed to load officers</option>';
-                    });
-            }
         };
 
         window.closeDispatchModal = function closeDispatchModal() {
@@ -2321,34 +2275,24 @@ setInterval(updateSLATimers, 1000);
             if (modal) modal.style.display = 'none';
         };
 
-        window.dispatchToSelectedPatrol = async function dispatchToSelectedPatrol() {
+        window.dispatchToNearestPatrol = async function dispatchToNearestPatrol() {
             const modal = window.ensureDispatchModalExists();
             const reportId = modal.querySelector('#dispatch_report_id')?.value;
-            const officerId = modal.querySelector('#dispatch_officer_id')?.value;
             const notes = modal.querySelector('#dispatch_notes')?.value || '';
             const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
-
-            if (!officerId) {
-                alert('Please select an officer to dispatch.');
-                return;
-            }
 
             modal.querySelector('#dispatch-confirm').style.display = 'none';
             modal.querySelector('#dispatch-loading').style.display = 'block';
 
             try {
-                const res = await fetch('/dispatches', {
+                const res = await fetch('/dispatches/auto', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         ...(csrf ? { 'X-CSRF-TOKEN': csrf } : {}),
                         'Accept': 'application/json',
                     },
-                    body: JSON.stringify({ 
-                        report_id: reportId, 
-                        patrol_officer_id: officerId,
-                        notes: notes 
-                    })
+                    body: JSON.stringify({ report_id: reportId, notes: notes })
                 });
 
                 const data = await res.json().catch(() => ({}));
@@ -4267,9 +4211,15 @@ function generatePDF(report) {
                         <span style="font-size: 36px;">🚓</span>
                     </div>
                     <h3 style="margin: 0 0 8px; font-size: 18px; color: #1f2937;">Ready to Dispatch</h3>
-                    <p style="margin: 0 0 24px; color: #666; font-size: 14px; line-height: 1.5;">
-                        The system will automatically find and notify the nearest on-duty patrol officer to respond to this report.
+                    <p style="margin: 0 0 16px; color: #666; font-size: 14px; line-height: 1.5;">
+                        Select an available patrol officer to respond to this report.
                     </p>
+                    <div style="margin-bottom: 24px; text-align: left;">
+                        <label for="patrol_officer_select" style="display: block; font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 8px;">Available Officers</label>
+                        <select id="patrol_officer_select" style="width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; background-color: #f9fafb;">
+                            <option value="">Loading officers...</option>
+                        </select>
+                    </div>
                     <input type="hidden" id="dispatch_report_id">
                     <div style="display: flex; gap: 12px; justify-content: center;">
                         <button type="button" onclick="window.closeDispatchModal()" style="padding: 12px 24px; background: #f3f4f6; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500;">
@@ -4348,6 +4298,7 @@ function generatePDF(report) {
         }
     </style>
 
+    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
     <script>
     // Dispatch Modal Functions - Made global for onclick handlers
     window.openDispatchModal = function(reportId) {
@@ -4359,6 +4310,34 @@ function generatePDF(report) {
         document.getElementById('dispatch-success').style.display = 'none';
         document.getElementById('dispatch-error').style.display = 'none';
         document.getElementById('dispatchModal').style.display = 'flex';
+        
+        // Fetch on-duty officers
+        const selectElement = document.getElementById('patrol_officer_select');
+        selectElement.innerHTML = '<option value="">Loading officers...</option>';
+        selectElement.disabled = true;
+        
+        fetch('/dispatches/on-duty-officers')
+            .then(res => res.json())
+            .then(data => {
+                const officers = data.officers || [];
+                selectElement.innerHTML = '<option value="">-- Select an Officer --</option>';
+                if (officers.length === 0) {
+                    selectElement.innerHTML = '<option value="">No officers currently available</option>';
+                } else {
+                    officers.forEach(officer => {
+                        const option = document.createElement('option');
+                        option.value = officer.id;
+                        const locationText = officer.station_name ? ` (${officer.station_name})` : '';
+                        option.textContent = officer.name + locationText;
+                        selectElement.appendChild(option);
+                    });
+                    selectElement.disabled = false;
+                }
+            })
+            .catch(err => {
+                console.error('Error fetching officers:', err);
+                selectElement.innerHTML = '<option value="">Error loading officers</option>';
+            });
     }
     
     // Event delegation for dispatch buttons - handles dynamically created buttons
@@ -4375,22 +4354,28 @@ function generatePDF(report) {
     
     window.dispatchToNearestPatrol = function() {
         const reportId = document.getElementById('dispatch_report_id').value;
+        const officerId = document.getElementById('patrol_officer_select').value;
         
-        console.log('🚓 Dispatching patrol for report:', reportId);
+        if (!officerId) {
+            alert('Please select an available patrol officer.');
+            return;
+        }
+        
+        console.log('🚓 Dispatching patrol for report:', reportId, 'to officer:', officerId);
         
         // Show loading
         document.getElementById('dispatch-confirm').style.display = 'none';
         document.getElementById('dispatch-loading').style.display = 'block';
         
-        // Auto-dispatch to nearest patrol
-        fetch('/dispatches/auto', {
+        // Manual dispatch to selected patrol
+        fetch('/dispatches', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
                 'Accept': 'application/json',
             },
-            body: JSON.stringify({ report_id: reportId })
+            body: JSON.stringify({ report_id: reportId, patrol_officer_id: officerId, notes: 'Manually dispatched from Admin dashboard.' })
         })
         .then(response => {
             console.log('📡 Response status:', response.status);
@@ -4435,9 +4420,9 @@ function generatePDF(report) {
             }
         });
 
-        // Start auto-refresh interval (1 second)
-        autoRefreshInterval = setInterval(fetchReportUpdates, 1000);
-        console.log('📡 Auto-refresh initialized (1s)');
+        // Start auto-refresh interval (5 seconds)
+        autoRefreshInterval = setInterval(fetchReportUpdates, 5000);
+        console.log('📡 Auto-refresh initialized');
     }
 
     async function fetchReportUpdates() {
@@ -4557,41 +4542,41 @@ function generatePDF(report) {
         }, 4000);
     }
 
-    function initSseReportUpdates() {
-        if (typeof io === 'undefined') return;
-
-        const sseUrl = "{{ env('SSE_URL', 'https://userside-node-server.onrender.com/api/stream') }}";
-        const apiUrl = sseUrl.replace('/api/stream', '');
-        let lastSseUpdate = 0;
-
-        const socket = io(apiUrl, {
-            transports: ['websocket', 'polling'],
-            reconnectionDelayMax: 5000,
+    function initSocketLiveUpdates() {
+        const socketUrl = "{{ env('NODE_BACKEND_URL', 'https://node-server-gk1u.onrender.com') }}";
+        const socket = io(socketUrl, {
+            transports: ['websocket', 'polling']
         });
 
-        const handleUpdate = () => {
+        let lastUpdate = 0;
+
+        socket.on('connect', () => {
+            console.log('🟢 Socket.io connected for live updates');
+        });
+
+        socket.on('update', () => {
             const now = Date.now();
-            if (now - lastSseUpdate < 1000) return;
-            lastSseUpdate = now;
-            fetchReportUpdates();
-        };
-
-        socket.on('update', handleUpdate);
-
-        // Force reconnect when tab becomes visible
-        document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible') {
-                if (!socket.connected) {
-                    socket.connect();
-                }
+            if (now - lastUpdate < 3000) return; // Debounce 3s
+            lastUpdate = now;
+            console.log('🔄 Live update received via Socket.io, fetching latest reports...');
+            if (typeof fetchReportUpdates === 'function') {
+                fetchReportUpdates();
             }
+        });
+
+        socket.on('disconnect', () => {
+            console.log('🔴 Socket.io disconnected');
+        });
+        
+        socket.on('connect_error', (error) => {
+            console.warn('⚠️ Socket.io connection error:', error.message);
         });
     }
 
     // Initialize auto-refresh when page loads
     document.addEventListener('DOMContentLoaded', () => {
         initAutoRefresh();
-        initSseReportUpdates();
+        initSocketLiveUpdates();
     });
 
     // Pause auto-refresh when user is interacting with modals

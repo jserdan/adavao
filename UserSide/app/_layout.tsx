@@ -13,6 +13,7 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 import LoadingScreen from '../components/LoadingScreen';
 import LoadingOverlay from '../components/LoadingOverlay';
 import GradientBackground from '../components/GradientBackground';
+import NetworkBanner from '../components/NetworkBanner';
 import { UserProvider } from '../contexts/UserContext';
 import { LoadingProvider, useLoading } from '../contexts/LoadingContext';
 import { inactivityManager } from '../services/inactivityManager';
@@ -161,6 +162,7 @@ function AppContent() {
               />
             </Stack>
             <StatusBar style="auto" />
+            <NetworkBanner />
           </ThemeProvider>
         </SafeAreaView>
         <LoadingOverlay visible={isLoading} message={loadingMessage} />
