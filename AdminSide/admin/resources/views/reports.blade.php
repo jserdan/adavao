@@ -3042,8 +3042,17 @@ setInterval(updateSLATimers, 1000);
                             }) : '—';
 
                             const officerName = dispatch.officer_name || (dispatch.patrol_officer ? `${dispatch.patrol_officer.firstname || ''} ${dispatch.patrol_officer.lastname || ''}`.trim() : 'Unknown Officer');
-                            const responseTimeSec = dispatch.response_time || null;
-                            const responseTimeDisp = responseTimeSec !== null ? `${Math.floor(responseTimeSec / 60)}m ${responseTimeSec % 60}s` : '—';
+                            // Calculate response time from report creation to officer arrival (matches table column)
+                            let responseTimeDisp = '—';
+                            if (report.created_at) {
+                                const createdAt = new Date(report.created_at);
+                                const endTime = dispatch.arrived_at ? new Date(dispatch.arrived_at) : new Date();
+                                const elapsedSec = Math.floor((endTime - createdAt) / 1000);
+                                const h = Math.floor(elapsedSec / 3600);
+                                const m = Math.floor((elapsedSec % 3600) / 60);
+                                const s = elapsedSec % 60;
+                                responseTimeDisp = h > 0 ? `${h}h ${m}m ${s}s` : (m > 0 ? `${m}m ${s}s` : `${s}s`);
+                            }
                             const validityLabel = dispatch.is_valid === true || dispatch.is_valid === 'true' ? '✅ Valid' : dispatch.is_valid === false || dispatch.is_valid === 'false' ? '❌ Invalid' : '⏳ Pending';
                             const validityColor = dispatch.is_valid === true || dispatch.is_valid === 'true' ? '#065f46' : dispatch.is_valid === false || dispatch.is_valid === 'false' ? '#991b1b' : '#6b7280';
 

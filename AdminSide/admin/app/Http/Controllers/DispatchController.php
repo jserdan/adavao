@@ -370,13 +370,7 @@ class DispatchController extends Controller
         LEFT JOIN police_stations ps ON u.assigned_station_id = ps.station_id
         LEFT JOIN patrol_locations pl ON u.id = pl.user_id
         WHERE LOWER(COALESCE(u.user_role::text, u.role::text, '')) = 'patrol_officer'
-          AND u.is_on_duty = true
-          AND NOT EXISTS (
-              SELECT 1 FROM patrol_dispatches pd 
-              WHERE pd.patrol_officer_id = u.id 
-                AND pd.status IN ('pending', 'accepted', 'en_route', 'arrived')
-          )
-        ORDER BY pl.updated_at DESC NULLS LAST
+        ORDER BY u.is_on_duty DESC, pl.updated_at DESC NULLS LAST
     ");
 
         return response()->json(['officers' => $officers]);
