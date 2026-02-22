@@ -405,7 +405,7 @@ app.get('/api/dispatch/station/:stationId/pending', verifyUserRole, requireAutho
 app.post('/api/dispatch/:dispatchId/respond', verifyUserRole, requireAuthorizedRole, respondToDispatch);
 app.post('/api/dispatch/:dispatchId/en-route', verifyUserRole, requireAuthorizedRole, markEnRoute);
 app.post('/api/dispatch/:dispatchId/arrived', verifyUserRole, requireAuthorizedRole, markArrived);
-app.post('/api/dispatch/:dispatchId/verify', verifyUserRole, requireAuthorizedRole, verifyReport);
+app.post('/api/dispatch/:dispatchId/verify', verifyUserRole, requireAuthorizedRole, verificationUpload.single('evidence'), verifyReport);
 
 // Patrol dispatch API (mobile patrol UI)
 app.get('/api/patrol/dispatches', verifyUserRole, requireAuthorizedRole, getMyDispatches);

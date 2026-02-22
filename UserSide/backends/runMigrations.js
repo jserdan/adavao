@@ -22,24 +22,25 @@ async function runMigrations() {
     // ── Widen contact & address columns to TEXT for encrypted data ────
     // Encrypted values are 60+ chars; VARCHAR(15) truncates/errors on PostgreSQL.
     console.log('🔧 Ensuring contact/address columns are TEXT type...');
-    const columnWidenQueries = [
+    const schemaQueries = [
       `ALTER TABLE users_public ALTER COLUMN contact TYPE TEXT`,
       `ALTER TABLE users_public ALTER COLUMN address TYPE TEXT`,
       `ALTER TABLE user_admin ALTER COLUMN contact TYPE TEXT`,
       `ALTER TABLE user_admin ALTER COLUMN address TYPE TEXT`,
       `ALTER TABLE pending_user_admin_registrations ALTER COLUMN contact TYPE TEXT`,
+      `ALTER TABLE patrol_dispatches ADD COLUMN IF NOT EXISTS verification_media_url TEXT`,
     ];
-    for (const q of columnWidenQueries) {
+    for (const q of schemaQueries) {
       try {
         await db.query(q);
       } catch (colErr) {
         // Column might already be TEXT, or table/column might not exist — safe to ignore
         if (!colErr.message.includes('does not exist')) {
-          console.log(`  ℹ️  ${q.split('ALTER COLUMN ')[1]?.split(' ')[0] || ''}: ${colErr.message.includes('already') ? 'already TEXT' : colErr.message}`);
+          console.log(`  ℹ️  ${q.split('ALTER COLUMN ')[1]?.split(' ')[0] || ''}: ${colErr.message.includes('already') ? 'already TEXT/Column exists' : colErr.message}`);
         }
       }
     }
-    console.log('✅ Column type check complete.');
+    console.log('✅ Schema modifications complete.');
 
     // ── Repair corrupted encrypted data ──────────────────────────
     // Previously, VARCHAR(15) truncated encrypted values making them unrecoverable.

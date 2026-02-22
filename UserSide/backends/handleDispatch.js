@@ -77,11 +77,11 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
     const R = 6371; // Earth's radius in kilometers
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = 
-        Math.sin(dLat/2) * Math.sin(dLat/2) +
+    const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
         Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-        Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
 }
 
@@ -129,7 +129,7 @@ async function findNearestPatrolOfficer(reportLat, reportLon, stationId) {
                     parseFloat(officer.latitude),
                     parseFloat(officer.longitude)
                 );
-                
+
                 if (distance < minDistance) {
                     minDistance = distance;
                     nearestOfficer = {
@@ -290,9 +290,9 @@ async function sendToDispatch(req, res) {
              VALUES ($1, $2, NULL, 'pending', NOW(), $3, $4, NOW(), NOW())
              RETURNING dispatch_id`,
             [
-                reportId, 
-                report.assigned_station_id, 
-                dispatcherId || null, 
+                reportId,
+                report.assigned_station_id,
+                dispatcherId || null,
                 notes || null
             ]
         );
@@ -353,10 +353,10 @@ async function sendToDispatch(req, res) {
  */
 async function sendDispatchNotifications(pushTokens, dispatchInfo) {
     try {
-        const assignedText = dispatchInfo.assignedTo 
-            ? ` (Assigned to ${dispatchInfo.assignedTo})` 
+        const assignedText = dispatchInfo.assignedTo
+            ? ` (Assigned to ${dispatchInfo.assignedTo})`
             : '';
-        
+
         const messages = pushTokens.map(token => ({
             to: token,
             sound: 'default',
@@ -693,11 +693,22 @@ async function verifyReport(req, res) {
         const { dispatchId } = req.params;
         const { userId, isValid, validationNotes } = req.body;
 
+        // isValid might come in as a string from FormData
+        const isValidBool = isValid === 'true' || isValid === true;
+
         if (!userId || !dispatchId || isValid === undefined) {
             return res.status(400).json({
                 success: false,
                 message: 'userId, dispatchId, and isValid are required'
             });
+        }
+
+        // Handle uploaded verification photo (Optional for invalid, required for real evidence if possible)
+        let evidenceUrl = null;
+        if (req.file) {
+            // Save as protocol-relative or relative path
+            evidenceUrl = `/evidence/${req.file.filename}`;
+            console.log(`📸 Processed verification evidence for dispatch #${dispatchId}:`, evidenceUrl);
         }
 
         // Verify user is patrol officer assigned to this dispatch
@@ -718,7 +729,7 @@ async function verifyReport(req, res) {
         const arrivedAt = dispatch.arrived_at ? new Date(dispatch.arrived_at) : now;
         const completionTimeSeconds = Math.round((now - arrivedAt) / 1000);
 
-        // Update dispatch as completed with validation
+        // Update dispatch as completed with validation and evidence
         await db.query(
             `UPDATE patrol_dispatches
              SET status = 'completed',
@@ -726,15 +737,16 @@ async function verifyReport(req, res) {
                  completion_time = $1,
                  is_valid = $2,
                  validation_notes = $3,
+                 verification_media_url = COALESCE($5, verification_media_url),
                  validated_at = NOW(),
                  updated_at = NOW()
              WHERE dispatch_id = $4`,
-            [completionTimeSeconds, isValid, validationNotes || null, dispatchId]
+            [completionTimeSeconds, isValidBool, validationNotes || null, dispatchId, evidenceUrl]
         );
 
         // Update report status based on validation
         // Valid = keep investigating (patrol verified it's real), Invalid = resolved (case closed)
-        const newReportStatus = isValid ? 'investigating' : 'resolved';
+        const newReportStatus = isValidBool ? 'investigating' : 'resolved';
         await db.query(
             `UPDATE reports 
              SET status = $1, 
@@ -742,7 +754,7 @@ async function verifyReport(req, res) {
                  validated_at = NOW(),
                  updated_at = NOW()
              WHERE report_id = $3`,
-            [newReportStatus, isValid ? 'valid' : 'invalid', dispatch.report_id]
+            [newReportStatus, isValidBool ? 'valid' : 'invalid', dispatch.report_id]
         );
 
         // Create notification for admin side about the verification
@@ -760,11 +772,11 @@ async function verifyReport(req, res) {
                     OR ua.user_role IN ('admin', 'super_admin')`,
                 [
                     `Report #${dispatch.report_id} has been ${isValid ? 'verified as valid' : 'marked as invalid'} by patrol officer.`,
-                    JSON.stringify({ 
-                        report_id: dispatch.report_id, 
-                        dispatch_id: dispatchId, 
+                    JSON.stringify({
+                        report_id: dispatch.report_id,
+                        dispatch_id: dispatchId,
                         is_valid: isValid,
-                        validation_notes: validationNotes 
+                        validation_notes: validationNotes
                     }),
                     dispatch.report_id
                 ]

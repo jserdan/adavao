@@ -1677,24 +1677,18 @@
                                             $elapsedSeconds = $createdAt->diffInSeconds(\Carbon\Carbon::now());
                                         }
 
-                                        // Format elapsed time as human-readable
                                         $formatTime = function($totalSec) {
-                                            $h = floor($totalSec / 3600);
-                                            $m = floor(($totalSec % 3600) / 60);
+                                            $m = floor($totalSec / 60);
                                             $s = $totalSec % 60;
-                                            if ($h > 0) return sprintf('%dh %dm %dsec', $h, $m, $s);
-                                            if ($m > 0) return sprintf('%dm %dsec', $m, $s);
-                                            return sprintf('%dsec', $s);
+                                            return sprintf('%dm %ds', $m, $s);
                                         };
 
-                                        if ($elapsedSeconds < $threeMinutes) {
-                                            $remainingSeconds = $threeMinutes - $elapsedSeconds;
-                                            $timerClass = 'countdown';
-                                            $timerDisplay = $formatTime($remainingSeconds);
+                                        if ($elapsedSeconds <= $threeMinutes) {
+                                            $timerClass = 'countdown'; // Safe styling
+                                            $timerDisplay = $formatTime($elapsedSeconds);
                                         } else {
-                                            $exceededSeconds = $elapsedSeconds - $threeMinutes;
                                             $timerClass = 'exceeded';
-                                            $timerDisplay = '+' . $formatTime($exceededSeconds);
+                                            $timerDisplay = $formatTime($elapsedSeconds);
                                         }
                                     @endphp
                                     <span class="sla-timer {{ $timerClass }}" 
@@ -2500,10 +2494,48 @@ setInterval(updateSLATimers, 1000);
             console.log('Table sorted by urgency: Critical → High → Medium → Low');
         }
 
+        // Function to update SLA timers every second
+        function updateSLATimers() {
+            const timers = document.querySelectorAll('.sla-timer');
+            const now = Math.floor(Date.now() / 1000);
+            
+            timers.forEach(timer => {
+                const createdAt = parseInt(timer.dataset.createdAt);
+                const arrivedAt = timer.dataset.arrivedAt ? parseInt(timer.dataset.arrivedAt) : null;
+                
+                if (!createdAt) return;
+                
+                // If arrived, timer freezes
+                const elapsedSeconds = arrivedAt ? (arrivedAt - createdAt) : (now - createdAt);
+                const threeMinutes = 180;
+                
+                const m = Math.floor(elapsedSeconds / 60);
+                const s = elapsedSeconds % 60;
+                const timeString = `${m}m ${s}s`;
+                
+                timer.textContent = timeString;
+                
+                if (elapsedSeconds <= threeMinutes) {
+                    if (timer.classList.contains('exceeded')) {
+                        timer.classList.remove('exceeded');
+                        timer.classList.add('countdown');
+                    }
+                } else {
+                    if (timer.classList.contains('countdown')) {
+                        timer.classList.remove('countdown');
+                        timer.classList.add('exceeded');
+                    }
+                }
+            });
+        }
+
         // Start auto-refresh when page loads
         document.addEventListener('DOMContentLoaded', function() {
             // Check for new reports every 2 seconds for real-time updates
             autoRefreshInterval = setInterval(checkForNewReports, 2000);
+            // Update timers every second
+            setInterval(updateSLATimers, 1000);
+            
             console.log('Auto-refresh enabled: Checking for new reports every 2 seconds');
             
             // Auto-sort table by urgency on page load
@@ -4328,7 +4360,8 @@ function generatePDF(report) {
                         const option = document.createElement('option');
                         option.value = officer.id;
                         const locationText = officer.station_name ? ` (${officer.station_name})` : '';
-                        option.textContent = officer.name + locationText;
+                        const dutyStatus = officer.is_on_duty ? ' (Online)' : ' (Offline)';
+                        option.textContent = officer.name + dutyStatus + locationText;
                         selectElement.appendChild(option);
                     });
                     selectElement.disabled = false;
@@ -4476,11 +4509,20 @@ function generatePDF(report) {
                 showUpdateNotification(report);
             }
 
-            // Update validity if changed
             const validitySelect = row.querySelector('.validity-select');
             if (validitySelect && validitySelect.value !== report.is_valid) {
                 validitySelect.value = report.is_valid;
                 validitySelect.dataset.originalValidity = report.is_valid;
+            }
+
+            // Update SLA Timer data hooks dynamically if a patrol just arrived
+            const slaTimer = row.querySelector('.sla-timer');
+            if (slaTimer) {
+                if (report.dispatch && report.dispatch.arrived_at) {
+                    // Calculate Unix timestamp of arrival to freeze the timer dynamically
+                    const arrivedUnixTimestamp = Math.floor(new Date(report.dispatch.arrived_at).getTime() / 1000);
+                    slaTimer.dataset.arrivedAt = arrivedUnixTimestamp;
+                }
             }
         });
     }

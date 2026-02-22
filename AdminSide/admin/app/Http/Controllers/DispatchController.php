@@ -358,17 +358,17 @@ class DispatchController extends Controller
                 pl.latitude,
                 pl.longitude,
                 pl.updated_at as location_updated_at,
-                CASE 
-                    WHEN pl.updated_at > NOW() - INTERVAL '10 minutes' THEN true 
-                    ELSE false 
-                END as has_recent_location
-            FROM users_public u
-            LEFT JOIN police_stations ps ON u.assigned_station_id = ps.station_id
-            LEFT JOIN patrol_locations pl ON u.id = pl.user_id
-                        WHERE LOWER(COALESCE(u.user_role::text, u.role::text, '')) = 'patrol_officer'
-              AND u.is_on_duty = true
-            ORDER BY pl.updated_at DESC NULLS LAST
-        ");
+            CASE 
+                WHEN pl.updated_at > NOW() - INTERVAL '10 minutes' THEN true 
+                ELSE false 
+            END as has_recent_location,
+            u.is_on_duty
+        FROM users_public u
+        LEFT JOIN police_stations ps ON u.assigned_station_id = ps.station_id
+        LEFT JOIN patrol_locations pl ON u.id = pl.user_id
+        WHERE LOWER(COALESCE(u.user_role::text, u.role::text, '')) = 'patrol_officer'
+        ORDER BY u.is_on_duty DESC, pl.updated_at DESC NULLS LAST
+    ");
 
         return response()->json(['officers' => $officers]);
     }

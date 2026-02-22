@@ -9,7 +9,9 @@ import {
     ActivityIndicator,
     Linking,
     TextInput,
+    Image,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -43,6 +45,7 @@ export default function DispatchDetails() {
     const [validationNotes, setValidationNotes] = useState('');
     const [showVerificationModal, setShowVerificationModal] = useState(false);
     const [verifyingAs, setVerifyingAs] = useState<'valid' | 'invalid' | null>(null);
+    const [evidenceImage, setEvidenceImage] = useState<ImagePicker.ImagePickerAsset | null>(null);
 
     useEffect(() => {
         loadUserData();
@@ -57,11 +60,11 @@ export default function DispatchDetails() {
     // Auto-refresh dispatch details every 2 seconds (silent)
     useEffect(() => {
         if (!userId || !dispatchId) return;
-        
+
         const interval = setInterval(() => {
             loadDetails(false);
         }, 2000);
-        
+
         return () => clearInterval(interval);
     }, [userId, dispatchId]);
 
@@ -154,18 +157,61 @@ export default function DispatchDetails() {
         }
     };
 
+    const pickEvidence = async () => {
+        try {
+            const result = await ImagePicker.launchCameraAsync({
+                mediaTypes: ['images', 'videos'],
+                quality: 0.7,
+                allowsEditing: false,
+            });
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+                setEvidenceImage(result.assets[0]);
+            }
+        } catch {
+            // Fallback to gallery if camera fails
+            try {
+                const result = await ImagePicker.launchImageLibraryAsync({
+                    mediaTypes: ['images', 'videos'],
+                    quality: 0.7,
+                    allowsEditing: false,
+                });
+                if (!result.canceled && result.assets && result.assets.length > 0) {
+                    setEvidenceImage(result.assets[0]);
+                }
+            } catch {
+                Alert.alert('Error', 'Failed to open camera or gallery');
+            }
+        }
+    };
+
     const verifyReport = async (isValid: boolean) => {
         if (!dispatchId || !userId) return;
+
+        // Require evidence photo for verification
+        if (!evidenceImage) {
+            Alert.alert('Evidence Required', 'Please attach a photo or video as evidence before verifying.');
+            return;
+        }
+
         setActionLoading(true);
         try {
+            const formData = new FormData();
+            formData.append('userId', userId);
+            formData.append('isValid', String(isValid));
+            formData.append('validationNotes', validationNotes.trim() || '');
+
+            if (evidenceImage) {
+                const uri = evidenceImage.uri;
+                const filename = uri.split('/').pop() || 'evidence.jpg';
+                const match = /\.([\w]+)$/.exec(filename);
+                const type = match ? `image/${match[1]}` : 'image/jpeg';
+                formData.append('evidence', { uri, name: filename, type } as any);
+            }
+
             const response = await fetch(`${API_URL}/dispatch/${dispatchId}/verify`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-User-Id': userId },
-                body: JSON.stringify({
-                    userId,
-                    isValid,
-                    validationNotes: validationNotes.trim() || null,
-                }),
+                headers: { 'X-User-Id': userId },
+                body: formData,
             });
             const data = await response.json();
             if (response.ok && data?.success) {
@@ -182,6 +228,7 @@ export default function DispatchDetails() {
         } finally {
             setActionLoading(false);
             setShowVerificationModal(false);
+            setEvidenceImage(null);
         }
     };
 
@@ -205,7 +252,7 @@ export default function DispatchDetails() {
         try {
             const parsed = JSON.parse(reportType);
             if (Array.isArray(parsed)) return parsed.join(', ');
-        } catch {}
+        } catch { }
         return reportType;
     };
 
@@ -256,32 +303,51 @@ export default function DispatchDetails() {
         if (!showVerificationModal) return null;
         return (
             <View style={styles.modalOverlay}>
-                <View style={styles.modalContent}>
-                    <Text style={styles.modalTitle}>Verify Report as {verifyingAs === 'valid' ? 'VALID' : 'INVALID'}</Text>
-                    <Text style={styles.modalSubtitle}>
-                        {verifyingAs === 'valid' ? 'Confirm that this report is a real incident.' : 'Mark this report as fake or false.'}
-                    </Text>
-                    <TextInput
-                        style={styles.notesInput}
-                        placeholder="Add verification notes (optional)"
-                        value={validationNotes}
-                        onChangeText={setValidationNotes}
-                        multiline
-                        numberOfLines={3}
-                    />
-                    <View style={styles.modalButtons}>
-                        <TouchableOpacity style={styles.modalCancelButton} onPress={() => { setShowVerificationModal(false); setVerifyingAs(null); }}>
-                            <Text style={styles.modalCancelText}>Cancel</Text>
+                <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', alignItems: 'center', padding: spacing.lg }}>
+                    <View style={styles.modalContent}>
+                        <Text style={styles.modalTitle}>Verify Report as {verifyingAs === 'valid' ? 'VALID' : 'INVALID'}</Text>
+                        <Text style={styles.modalSubtitle}>
+                            {verifyingAs === 'valid' ? 'Confirm that this report is a real incident.' : 'Mark this report as fake or false.'}
+                        </Text>
+
+                        {/* Evidence Photo/Video Picker */}
+                        <TouchableOpacity style={styles.evidencePickerButton} onPress={pickEvidence}>
+                            {evidenceImage ? (
+                                <View style={styles.evidencePreviewContainer}>
+                                    <Image source={{ uri: evidenceImage.uri }} style={styles.evidencePreview} />
+                                    <Text style={styles.evidenceChangeText}>Tap to change</Text>
+                                </View>
+                            ) : (
+                                <View style={styles.evidencePlaceholder}>
+                                    <Ionicons name="camera" size={32} color={COLORS.textMuted} />
+                                    <Text style={styles.evidencePlaceholderText}>Take Photo / Video Evidence *</Text>
+                                    <Text style={{ fontSize: fontSize.xs, color: COLORS.danger }}>Required</Text>
+                                </View>
+                            )}
                         </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.modalConfirmButton, { backgroundColor: verifyingAs === 'valid' ? COLORS.success : COLORS.danger }]}
-                            onPress={() => verifyReport(verifyingAs === 'valid')}
-                            disabled={actionLoading}
-                        >
-                            {actionLoading ? <ActivityIndicator color={COLORS.white} size="small" /> : <Text style={styles.modalConfirmText}>Confirm</Text>}
-                        </TouchableOpacity>
+
+                        <TextInput
+                            style={styles.notesInput}
+                            placeholder="Add verification notes (optional)"
+                            value={validationNotes}
+                            onChangeText={setValidationNotes}
+                            multiline
+                            numberOfLines={3}
+                        />
+                        <View style={styles.modalButtons}>
+                            <TouchableOpacity style={styles.modalCancelButton} onPress={() => { setShowVerificationModal(false); setVerifyingAs(null); setEvidenceImage(null); }}>
+                                <Text style={styles.modalCancelText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.modalConfirmButton, { backgroundColor: verifyingAs === 'valid' ? COLORS.success : COLORS.danger, opacity: evidenceImage ? 1 : 0.5 }]}
+                                onPress={() => verifyReport(verifyingAs === 'valid')}
+                                disabled={actionLoading || !evidenceImage}
+                            >
+                                {actionLoading ? <ActivityIndicator color={COLORS.white} size="small" /> : <Text style={styles.modalConfirmText}>Confirm</Text>}
+                            </TouchableOpacity>
+                        </View>
                     </View>
-                </View>
+                </ScrollView>
             </View>
         );
     };
@@ -411,8 +477,8 @@ export default function DispatchDetails() {
                             {dispatch.status === 'arrived'
                                 ? `${dispatch.officer_name} has arrived at the location`
                                 : dispatch.status === 'en_route'
-                                ? `${dispatch.officer_name} is en route to the location`
-                                : `${dispatch.officer_name} has accepted this dispatch`
+                                    ? `${dispatch.officer_name} is en route to the location`
+                                    : `${dispatch.officer_name} has accepted this dispatch`
                             }
                         </Text>
                     </View>
@@ -513,10 +579,16 @@ const styles = StyleSheet.create({
     actionButtonText: { fontSize: fontSize.lg, fontWeight: 'bold', color: COLORS.white },
     verifyPrompt: { fontSize: fontSize.md, color: COLORS.textPrimary, textAlign: 'center', marginBottom: spacing.md },
     verifyButtons: { flexDirection: 'row', gap: spacing.md },
-    verifyButton: { flex: 1, alignItems: 'center', padding: spacing.lg, borderRadius: borderRadius.lg },
+    verifyButton: { flex: 1, alignItems: 'center', padding: spacing.md, borderRadius: borderRadius.lg },
     verifyValidButton: { backgroundColor: COLORS.success },
     verifyInvalidButton: { backgroundColor: COLORS.danger },
-    verifyButtonText: { fontSize: fontSize.lg, fontWeight: 'bold', color: COLORS.white, marginTop: spacing.xs },
+    verifyButtonText: { fontSize: fontSize.md, fontWeight: 'bold', color: COLORS.white, marginTop: spacing.xs },
+    evidencePickerButton: { borderWidth: 2, borderColor: COLORS.border, borderStyle: 'dashed', borderRadius: borderRadius.md, padding: spacing.md, marginBottom: spacing.lg, alignItems: 'center' },
+    evidencePreviewContainer: { alignItems: 'center' },
+    evidencePreview: { width: 200, height: 150, borderRadius: borderRadius.md, marginBottom: spacing.xs },
+    evidenceChangeText: { fontSize: fontSize.xs, color: COLORS.primary, fontWeight: '600' },
+    evidencePlaceholder: { alignItems: 'center', paddingVertical: spacing.md },
+    evidencePlaceholderText: { fontSize: fontSize.sm, color: COLORS.textMuted, marginTop: spacing.xs },
     verifyButtonSubtext: { fontSize: fontSize.sm, color: 'rgba(255,255,255,0.8)' },
     completedBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#D1FAE5', padding: spacing.lg, borderRadius: borderRadius.lg, marginTop: spacing.lg, gap: spacing.sm },
     completedText: { fontSize: fontSize.md, fontWeight: '600', color: COLORS.success },
