@@ -2195,14 +2195,16 @@ setInterval(updateSLATimers, 1000);
                             <div style="width:80px; height:80px; background:linear-gradient(135deg,#3b82f6 0%,#1d4ed8 100%); border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto 16px;">
                                 <span style="font-size:36px;">🚓</span>
                             </div>
-                            <h3 style="margin:0 0 8px; font-size:18px; color:#1f2937;">Dispatch to All Patrol Officers</h3>
+                            <h3 style="margin:0 0 8px; font-size:18px; color:#1f2937;">Ready to Dispatch</h3>
                             <p style="margin:0 0 16px; color:#666; font-size:14px; line-height:1.5;">
-                                This dispatch will be broadcast to all patrol officers. Add a note to guide which officer should respond.
+                                Select an available patrol officer to respond to this report.
                             </p>
                             <input type="hidden" id="dispatch_report_id" />
-                            <div style="text-align:left; margin-bottom:20px;">
-                                <label for="dispatch_notes" style="display:block; font-size:13px; font-weight:600; color:#374151; margin-bottom:6px;">Note to Patrol Officers</label>
-                                <textarea id="dispatch_notes" rows="3" placeholder="e.g. This report location is nearby Sta. Ana Police Station, Patrol 3 please respond..." style="width:100%; padding:10px 12px; border:1px solid #d1d5db; border-radius:8px; font-size:14px; resize:vertical; font-family:inherit; box-sizing:border-box;"></textarea>
+                            <div style="margin-bottom:16px; text-align:left;">
+                                <label for="patrol_officer_select" style="display:block; font-size:14px; font-weight:600; color:#374151; margin-bottom:8px;">Available Officers</label>
+                                <select id="patrol_officer_select" style="width:100%; padding:10px 12px; border:1px solid #d1d5db; border-radius:6px; font-size:14px; background-color:#f9fafb; box-sizing:border-box;">
+                                    <option value="">Loading officers...</option>
+                                </select>
                             </div>
                             <div style="display:flex; gap:12px; justify-content:center;">
                                 <button type="button" data-dispatch-cancel style="padding:12px 24px; background:#f3f4f6; border:none; border-radius:8px; cursor:pointer; font-size:14px; font-weight:500;">Cancel</button>
@@ -2251,10 +2253,6 @@ setInterval(updateSLATimers, 1000);
             const reportIdInput = modal.querySelector('#dispatch_report_id');
             if (reportIdInput) reportIdInput.value = String(reportId);
 
-            // Clear notes
-            const notesInput = modal.querySelector('#dispatch_notes');
-            if (notesInput) notesInput.value = '';
-
             // Reset states
             modal.querySelector('#dispatch-loading')?.style && (modal.querySelector('#dispatch-loading').style.display = 'none');
             modal.querySelector('#dispatch-confirm')?.style && (modal.querySelector('#dispatch-confirm').style.display = 'block');
@@ -2262,6 +2260,55 @@ setInterval(updateSLATimers, 1000);
             modal.querySelector('#dispatch-error')?.style && (modal.querySelector('#dispatch-error').style.display = 'none');
 
             modal.style.display = 'flex';
+
+            // Fetch patrol officers
+            const selectElement = modal.querySelector('#patrol_officer_select');
+            if (selectElement) {
+                selectElement.innerHTML = '<option value="">Loading officers...</option>';
+                selectElement.disabled = true;
+
+                const apiUrl = "{{ url('/api/on-duty-officers') }}";
+                console.log('🚓 Fetching officers from:', apiUrl);
+                fetch(apiUrl, {
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || ''
+                    },
+                    credentials: 'same-origin'
+                })
+                .then(res => {
+                    console.log('🚓 Officers API response:', res.status, res.headers.get('content-type'));
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    const ct = res.headers.get('content-type') || '';
+                    if (!ct.includes('application/json')) {
+                        throw new Error('Non-JSON response (possible auth redirect)');
+                    }
+                    return res.json();
+                })
+                .then(data => {
+                    console.log('🚓 Officers data:', data);
+                    const officers = data.officers || [];
+                    selectElement.innerHTML = '<option value="">-- Select an Officer --</option>';
+                    if (officers.length === 0) {
+                        selectElement.innerHTML = '<option value="">No officers currently available</option>';
+                    } else {
+                        officers.forEach(officer => {
+                            const option = document.createElement('option');
+                            option.value = officer.id;
+                            const locationText = officer.station_name ? ` (${officer.station_name})` : '';
+                            const dutyStatus = officer.is_on_duty ? ' 🟢 Online' : ' ⚫ Offline';
+                            option.textContent = officer.name + dutyStatus + locationText;
+                            selectElement.appendChild(option);
+                        });
+                        selectElement.disabled = false;
+                    }
+                })
+                .catch(err => {
+                    console.error('🚓 Error fetching officers:', err);
+                    selectElement.innerHTML = `<option value="">Error: ${err.message}</option>`;
+                });
+            }
         };
 
         window.closeDispatchModal = function closeDispatchModal() {
@@ -2272,21 +2319,26 @@ setInterval(updateSLATimers, 1000);
         window.dispatchToNearestPatrol = async function dispatchToNearestPatrol() {
             const modal = window.ensureDispatchModalExists();
             const reportId = modal.querySelector('#dispatch_report_id')?.value;
-            const notes = modal.querySelector('#dispatch_notes')?.value || '';
+            const officerId = modal.querySelector('#patrol_officer_select')?.value;
             const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
+
+            if (!officerId) {
+                alert('Please select an available patrol officer.');
+                return;
+            }
 
             modal.querySelector('#dispatch-confirm').style.display = 'none';
             modal.querySelector('#dispatch-loading').style.display = 'block';
 
             try {
-                const res = await fetch('/dispatches/auto', {
+                const res = await fetch('/dispatches', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         ...(csrf ? { 'X-CSRF-TOKEN': csrf } : {}),
                         'Accept': 'application/json',
                     },
-                    body: JSON.stringify({ report_id: reportId, notes: notes })
+                    body: JSON.stringify({ report_id: reportId, patrol_officer_id: officerId, notes: 'Dispatched from Admin dashboard' })
                 });
 
                 const data = await res.json().catch(() => ({}));
