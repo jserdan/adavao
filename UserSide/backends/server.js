@@ -998,13 +998,10 @@ const { runMigrations } = require('./runMigrations');
 
       // Start pinging after 5 seconds
       console.log("⏳ Starting keep-alive timer (5s delay)...");
-      /*
-      // Temporarily disabled auto-ping as requested
       setTimeout(() => {
         keepAlive(); // First ping
         setInterval(keepAlive, KEEP_ALIVE_INTERVAL);
       }, 5000); // Reduced to 5s for faster feedback
-      */
     } else {
       console.log('ℹ️ Keep-alive disabled: RENDER_EXTERNAL_URL not set?');
       console.log('   Env vars:', {
