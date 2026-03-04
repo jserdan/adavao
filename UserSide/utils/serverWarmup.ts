@@ -1,6 +1,9 @@
 /**
- * Server Warmup Utility
- * Prevents Render cold starts by pinging the server periodically
+ * Server Warmup Utility (KEEP-ALIVE / SELF-PING)
+ * Prevents Render cold starts by pinging the server periodically.
+ *
+ * ⚠️  CURRENTLY DISABLED — callers in app/_layout.tsx are commented out.
+ *     Uncomment the import and function calls in _layout.tsx to re-enable.
  */
 
 import { BACKEND_URL } from '../config/backend';
