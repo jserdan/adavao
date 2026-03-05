@@ -958,60 +958,60 @@ const { runMigrations } = require('./runMigrations');
     // Duplicated app.listen logic removed
 
     // =====================================================================
-    // 🔄 KEEP-ALIVE / SELF-PING — ENABLED
+    // 🔄 KEEP-ALIVE / SELF-PING — DISABLED (commented out)
     // Prevents Render free-tier cold starts by periodically pinging
     // UserSide, AdminSide, and SARIMA API health endpoints.
     // =====================================================================
-    const KEEP_ALIVE_URL = process.env.KEEP_ALIVE_URL || process.env.RENDER_EXTERNAL_URL;
-    const ADMIN_KEEP_ALIVE_URL = process.env.ADMIN_KEEP_ALIVE_URL; // AdminSide URL
-    const SARIMA_KEEP_ALIVE_URL = process.env.SARIMA_KEEP_ALIVE_URL; // SARIMA API URL
-    const KEEP_ALIVE_INTERVAL = parseInt(process.env.KEEP_ALIVE_INTERVAL_MS || '30000', 10); // 30 seconds default
+    // const KEEP_ALIVE_URL = process.env.KEEP_ALIVE_URL || process.env.RENDER_EXTERNAL_URL;
+    // const ADMIN_KEEP_ALIVE_URL = process.env.ADMIN_KEEP_ALIVE_URL; // AdminSide URL
+    // const SARIMA_KEEP_ALIVE_URL = process.env.SARIMA_KEEP_ALIVE_URL; // SARIMA API URL
+    // const KEEP_ALIVE_INTERVAL = parseInt(process.env.KEEP_ALIVE_INTERVAL_MS || '30000', 10); // 30 seconds default
 
-    const pingUrl = async (targetUrl, label) => {
-      try {
-        const https = require('https');
-        const http = require('http');
-        const url = new URL(targetUrl);
-        const client = url.protocol === 'https:' ? https : http;
+    // const pingUrl = async (targetUrl, label) => {
+    //   try {
+    //     const https = require('https');
+    //     const http = require('http');
+    //     const url = new URL(targetUrl);
+    //     const client = url.protocol === 'https:' ? https : http;
 
-        const req = client.get(url.href, { timeout: 30000 }, (res) => {
-          console.log(`🏓 ${label}: ${res.statusCode}`);
-        });
+    //     const req = client.get(url.href, { timeout: 30000 }, (res) => {
+    //       console.log(`🏓 ${label}: ${res.statusCode}`);
+    //     });
 
-        req.on('error', () => { }); // Silently ignore - ping attempt still keeps server alive
-        req.on('timeout', () => req.destroy());
-      } catch (err) {
-        // Silently ignore - ping attempt still keeps server alive
-      }
-    };
+    //     req.on('error', () => { }); // Silently ignore - ping attempt still keeps server alive
+    //     req.on('timeout', () => req.destroy());
+    //   } catch (err) {
+    //     // Silently ignore - ping attempt still keeps server alive
+    //   }
+    // };
 
-    const urls = [];
-    if (KEEP_ALIVE_URL) urls.push({ url: KEEP_ALIVE_URL + '/health', label: 'UserSide' });
-    if (ADMIN_KEEP_ALIVE_URL) urls.push({ url: ADMIN_KEEP_ALIVE_URL, label: 'AdminSide' });
-    if (SARIMA_KEEP_ALIVE_URL) urls.push({ url: SARIMA_KEEP_ALIVE_URL, label: 'SARIMA API' });
+    // const urls = [];
+    // if (KEEP_ALIVE_URL) urls.push({ url: KEEP_ALIVE_URL + '/health', label: 'UserSide' });
+    // if (ADMIN_KEEP_ALIVE_URL) urls.push({ url: ADMIN_KEEP_ALIVE_URL, label: 'AdminSide' });
+    // if (SARIMA_KEEP_ALIVE_URL) urls.push({ url: SARIMA_KEEP_ALIVE_URL, label: 'SARIMA API' });
 
-    if (urls.length > 0) {
-      console.log(`🏓 Auto-ping enabled for ${urls.length} services`);
-      urls.forEach(u => console.log(`   Target: ${u.label} (${u.url})`));
+    // if (urls.length > 0) {
+    //   console.log(`🏓 Auto-ping enabled for ${urls.length} services`);
+    //   urls.forEach(u => console.log(`   Target: ${u.label} (${u.url})`));
 
-      const keepAlive = () => {
-        console.log(`⏰ Executing pings at ${new Date().toISOString()}`);
-        urls.forEach(u => pingUrl(u.url, u.label));
-      };
+    //   const keepAlive = () => {
+    //     console.log(`⏰ Executing pings at ${new Date().toISOString()}`);
+    //     urls.forEach(u => pingUrl(u.url, u.label));
+    //   };
 
-      // Start pinging after 5 seconds
-      console.log("⏳ Starting keep-alive timer (5s delay)...");
-      setTimeout(() => {
-        keepAlive(); // First ping
-        setInterval(keepAlive, KEEP_ALIVE_INTERVAL);
-      }, 5000); // Reduced to 5s for faster feedback
-    } else {
-      console.log('ℹ️ Keep-alive disabled: RENDER_EXTERNAL_URL not set?');
-      console.log('   Env vars:', {
-        KEEP_ALIVE_URL: process.env.KEEP_ALIVE_URL ? 'set' : 'missing',
-        RENDER_EXTERNAL_URL: process.env.RENDER_EXTERNAL_URL ? 'set' : 'missing'
-      });
-    }
+    //   // Start pinging after 5 seconds
+    //   console.log("⏳ Starting keep-alive timer (5s delay)...");
+    //   setTimeout(() => {
+    //     keepAlive(); // First ping
+    //     setInterval(keepAlive, KEEP_ALIVE_INTERVAL);
+    //   }, 5000); // Reduced to 5s for faster feedback
+    // } else {
+    //   console.log('ℹ️ Keep-alive disabled: RENDER_EXTERNAL_URL not set?');
+    //   console.log('   Env vars:', {
+    //     KEEP_ALIVE_URL: process.env.KEEP_ALIVE_URL ? 'set' : 'missing',
+    //     RENDER_EXTERNAL_URL: process.env.RENDER_EXTERNAL_URL ? 'set' : 'missing'
+    //   });
+    // }
     // =====================================================================
     // END KEEP-ALIVE BLOCK
     // =====================================================================
