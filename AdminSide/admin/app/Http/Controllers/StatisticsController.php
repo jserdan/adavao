@@ -606,39 +606,67 @@ class StatisticsController extends Controller
         ]);
     }
 
+    /**
+     * Compute month-of-year seasonality from BOTH CSV + DB reports
+     */
     private function computeSeasonalityFromCsv($year = null): array
     {
         $csvPath = storage_path('app/davao_crime_5years.csv');
-        if (!file_exists($csvPath)) {
-            return ['topMonths' => []];
-        }
-
         $monthTotals = array_fill(1, 12, 0.0);
         $monthCounts = array_fill(1, 12, 0);
 
-        $file = fopen($csvPath, 'r');
-        $header = fgetcsv($file);
-        $headerMap = array_flip($header ?: []);
-        $idxDate = $headerMap['date'] ?? 1;
-        $idxCount = $headerMap['crime_count'] ?? 4;
+        // ── 1. CSV data ─────────────────────────────────────────
+        if (file_exists($csvPath)) {
+            $file = fopen($csvPath, 'r');
+            $header = fgetcsv($file);
+            $headerMap = array_flip($header ?: []);
+            $idxDate = $headerMap['date'] ?? 1;
+            $idxCount = $headerMap['crime_count'] ?? 4;
 
-        while (($row = fgetcsv($file)) !== false) {
-            if (count($row) < 5) continue;
-            $date = $row[$idxDate] ?? null;
-            if (!$date || strlen($date) < 7) continue;
+            while (($row = fgetcsv($file)) !== false) {
+                if (count($row) < 5) continue;
+                $date = $row[$idxDate] ?? null;
+                if (!$date || strlen($date) < 7) continue;
 
-            $rowYear = substr($date, 0, 4);
-            $rowMonth = intval(substr($date, 5, 2));
-            if ($rowMonth < 1 || $rowMonth > 12) continue;
-            if ($year && $rowYear !== (string)$year) continue;
+                $rowYear = substr($date, 0, 4);
+                $rowMonth = intval(substr($date, 5, 2));
+                if ($rowMonth < 1 || $rowMonth > 12) continue;
+                if ($year && $rowYear !== (string)$year) continue;
 
-            $count = floatval($row[$idxCount] ?? 0);
-            $monthTotals[$rowMonth] += $count;
-            $monthCounts[$rowMonth] += 1;
+                $count = floatval($row[$idxCount] ?? 0);
+                $monthTotals[$rowMonth] += $count;
+                $monthCounts[$rowMonth] += 1;
+            }
+            fclose($file);
         }
-        fclose($file);
 
-        $monthNames = [
+        // ── 2. DB reports (validated) ───────────────────────────
+        try {
+            $dbQuery = DB::table('reports')
+                ->select(
+                    DB::raw('EXTRACT(MONTH FROM created_at) as m'),
+                    DB::raw('COUNT(*) as cnt')
+                )
+                ->where('is_valid', self::REPORT_VALID);
+
+            if ($year) {
+                $dbQuery->whereYear('created_at', $year);
+            }
+
+            $dbMonthly = $dbQuery->groupBy('m')->get();
+
+            foreach ($dbMonthly as $row) {
+                $m = intval($row->m);
+                if ($m >= 1 && $m <= 12) {
+                    $monthTotals[$m] += $row->cnt;
+                    $monthCounts[$m] += 1;
+                }
+            }
+        } catch (\Exception $e) {
+            \Log::warning('DB seasonality merge failed: ' . $e->getMessage());
+        }
+
+        // ── 3. Build averages ───────────────────────────────────        $monthNames = [
             1 => 'January', 2 => 'February', 3 => 'March', 4 => 'April', 5 => 'May', 6 => 'June',
             7 => 'July', 8 => 'August', 9 => 'September', 10 => 'October', 11 => 'November', 12 => 'December'
         ];
@@ -767,9 +795,69 @@ class StatisticsController extends Controller
         ];
     }
 
+    /**
+     * Fetch validated reports from the DB, normalized into the same
+     * byType / byLocation / monthly shape used by the CSV reader.
+     * Each report_type JSON entry counts as 1 incident.
+     */
+    private function _getDbReportStats($month, $year): array
+    {
+        $query = DB::table('reports')
+            ->join('locations', 'reports.location_id', '=', 'locations.location_id')
+            ->select('reports.report_type', 'locations.barangay', 'reports.created_at')
+            ->where('reports.is_valid', self::REPORT_VALID);
+
+        // Apply date filters (same formats the CSV path supports)
+        if ($month && preg_match('/^\d{4}-\d{2}$/', $month)) {
+            [$y, $m] = explode('-', $month);
+            $query->whereYear('reports.created_at', $y)
+                  ->whereMonth('reports.created_at', intval($m));
+        } elseif ($year) {
+            $query->whereYear('reports.created_at', $year);
+        }
+
+        $rows = $query->orderBy('reports.created_at', 'desc')->limit(10000)->get();
+
+        $crimesByType = [];
+        $crimesByLocation = [];
+        $monthlyStats = [];
+
+        foreach ($rows as $row) {
+            $barangay = trim((string)($row->barangay ?? ''));
+            $types = $this->normalizeReportTypes($row->report_type);
+            $createdAt = $row->created_at;
+            $rowYear = substr($createdAt, 0, 4);
+            $rowMonth = substr($createdAt, 5, 2);
+
+            foreach ($types as $rawType) {
+                $type = strtoupper(trim($rawType));
+                if ($type === '') continue;
+
+                $crimesByType[$type] = ($crimesByType[$type] ?? 0) + 1;
+
+                if ($barangay !== '') {
+                    $crimesByLocation[$barangay] = ($crimesByLocation[$barangay] ?? 0) + 1;
+                }
+
+                $mKey = "$rowYear-$rowMonth";
+                if (!isset($monthlyStats[$mKey])) {
+                    $monthlyStats[$mKey] = ['year' => intval($rowYear), 'month' => intval($rowMonth), 'count' => 0];
+                }
+                $monthlyStats[$mKey]['count'] += 1;
+            }
+        }
+
+        return [
+            'crimesByType' => $crimesByType,
+            'crimesByLocation' => $crimesByLocation,
+            'monthlyStats' => $monthlyStats,
+            'totalRows' => $rows->count(),
+        ];
+    }
+
     private function _getCrimeStats($month, $year)
     {
-        $cacheKey = 'crime_stats_data_v2' . ($month ? "_$month" : "") . ($year ? "_$year" : "");
+        $cacheKey = 'crime_stats_data_v3' . ($month ? "_$month" : "") . ($year ? "_$year" : "");
             
         return Cache::remember($cacheKey, 3600, function () use ($month, $year) {
             $csvPath = storage_path('app/davao_crime_5years.csv');
@@ -778,6 +866,7 @@ class StatisticsController extends Controller
                 throw new \Exception('Data file not found at: ' . $csvPath);
             }
 
+            // ── 1. Historical CSV data ─────────────────────────────
             $crimesByType = [];
             $crimesByLocation = [];
             $monthlyStats = [];
@@ -795,7 +884,7 @@ class StatisticsController extends Controller
 
                 $date = $row[$idxDate];
                 $barangay = trim($row[$idxBarangay]);
-                $type = trim($row[$idxType]);
+                $type = strtoupper(trim($row[$idxType]));
                 $count = floatval($row[$idxCount]);
                 
                 $rowYear = substr($date, 0, 4);
@@ -804,11 +893,8 @@ class StatisticsController extends Controller
                 if ($month && substr($date, 0, 7) !== $month) continue;
                 if ($year && $rowYear !== $year) continue;
 
-                if (!isset($crimesByType[$type])) $crimesByType[$type] = 0;
-                $crimesByType[$type] += $count;
-
-                if (!isset($crimesByLocation[$barangay])) $crimesByLocation[$barangay] = 0;
-                $crimesByLocation[$barangay] += $count;
+                $crimesByType[$type] = ($crimesByType[$type] ?? 0) + $count;
+                $crimesByLocation[$barangay] = ($crimesByLocation[$barangay] ?? 0) + $count;
 
                 $mKey = "$rowYear-$rowMonth";
                 if (!isset($monthlyStats[$mKey])) {
@@ -818,6 +904,30 @@ class StatisticsController extends Controller
             }
             fclose($file);
 
+            // ── 2. Live DB reports (validated) ─────────────────────
+            try {
+                $dbStats = $this->_getDbReportStats($month, $year);
+
+                foreach ($dbStats['crimesByType'] as $type => $cnt) {
+                    $crimesByType[$type] = ($crimesByType[$type] ?? 0) + $cnt;
+                }
+                foreach ($dbStats['crimesByLocation'] as $loc => $cnt) {
+                    $crimesByLocation[$loc] = ($crimesByLocation[$loc] ?? 0) + $cnt;
+                }
+                foreach ($dbStats['monthlyStats'] as $mKey => $entry) {
+                    if (!isset($monthlyStats[$mKey])) {
+                        $monthlyStats[$mKey] = $entry;
+                    } else {
+                        $monthlyStats[$mKey]['count'] += $entry['count'];
+                    }
+                }
+                $dbReportCount = $dbStats['totalRows'];
+            } catch (\Exception $e) {
+                \Log::warning('DB report stats merge failed, using CSV only: ' . $e->getMessage());
+                $dbReportCount = 0;
+            }
+
+            // ── 3. Build final response ────────────────────────────
             $crimeByType = collect($crimesByType)
                 ->map(function($c, $t) { return ['type' => $t, 'count' => $c]; })
                 ->sortByDesc('count')->values()->take(15);
@@ -826,7 +936,11 @@ class StatisticsController extends Controller
                 ->map(function($c, $l) { return ['location' => $l, 'count' => $c]; })
                 ->sortByDesc('count')->values()->take(10);
 
-            $monthlyStatsFormatted = collect($monthlyStats)->sortBy('year')->sortBy('month')->values();
+            $monthlyStatsFormatted = collect($monthlyStats)
+                ->sortBy(function ($item) {
+                    return sprintf('%04d-%02d', $item['year'], $item['month']);
+                })
+                ->values();
 
             $totalCrimes = array_sum($crimesByType);
             $latest = $monthlyStatsFormatted->last();
@@ -850,7 +964,9 @@ class StatisticsController extends Controller
                     'thisMonth' => $totalThisMonth,
                     'lastMonth' => 0,
                     'percentChange' => $percentChange
-                ]
+                ],
+                'source' => 'historical_csv+db_reports',
+                'dbReports' => $dbReportCount ?? 0,
             ];
         });
     }
@@ -881,14 +997,14 @@ class StatisticsController extends Controller
             }
             
             $data = $query->select(
-                    DB::raw('YEAR(created_at) as Year'),
-                    DB::raw('MONTH(created_at) as Month'),
-                    DB::raw('COUNT(*) as Count'),
-                    DB::raw('DATE_FORMAT(created_at, "%Y-%m-01") as Date')
+                    DB::raw('EXTRACT(YEAR FROM created_at)::int as "Year"'),
+                    DB::raw('EXTRACT(MONTH FROM created_at)::int as "Month"'),
+                    DB::raw('COUNT(*) as "Count"'),
+                    DB::raw("to_char(created_at, 'YYYY-MM') || '-01' as \"Date\"")
                 )
-                ->groupBy('Year', 'Month', 'Date')
-                ->orderBy('Year', 'asc')
-                ->orderBy('Month', 'asc')
+                ->groupBy(DB::raw('EXTRACT(YEAR FROM created_at)'), DB::raw('EXTRACT(MONTH FROM created_at)'), DB::raw("to_char(created_at, 'YYYY-MM')"))
+                ->orderBy(DB::raw('EXTRACT(YEAR FROM created_at)'), 'asc')
+                ->orderBy(DB::raw('EXTRACT(MONTH FROM created_at)'), 'asc')
                 ->get();
 
             $csv = "Year,Month,Count,Date\n";
@@ -943,14 +1059,16 @@ class StatisticsController extends Controller
 
     private function _getBarangayStats($month, $year) 
     {
-         $cacheKey = 'barangay_crime_stats_v2' . ($month ? "_$month" : "") . ($year ? "_$year" : "");
+         $cacheKey = 'barangay_crime_stats_v3' . ($month ? "_$month" : "") . ($year ? "_$year" : "");
             
          return Cache::remember($cacheKey, 3600, function () use ($month, $year) {
              $csvPath = storage_path('app/davao_crime_5years.csv');
              if (!file_exists($csvPath)) throw new \Exception('Data file not found at: ' . $csvPath);
 
              $barangayData = [];
-             $barangayCrimeTypes = []; // Track crime types per barangay
+             $barangayCrimeTypes = [];
+
+             // ── 1. Historical CSV data ─────────────────────────────
              $file = fopen($csvPath, 'r');
              $header = fgetcsv($file); 
              $headerMap = array_flip($header);
@@ -964,7 +1082,7 @@ class StatisticsController extends Controller
                 
                 $date = $row[$idxDate];
                 $barangay = trim($row[$idxBarangay]);
-                $crimeType = trim($row[$idxType]);
+                $crimeType = strtoupper(trim($row[$idxType]));
                 $count = floatval($row[$idxCount]);
                 
                 $rowYear = substr($date, 0, 4);
@@ -972,21 +1090,54 @@ class StatisticsController extends Controller
                 if ($month && substr($date, 0, 7) !== $month) continue;
                 if ($year && $rowYear !== $year) continue;
                 
-                // Track total crimes per barangay
-                if (!isset($barangayData[$barangay])) $barangayData[$barangay] = 0;
-                $barangayData[$barangay] += $count;
+                $barangayData[$barangay] = ($barangayData[$barangay] ?? 0) + $count;
                 
-                // Track crime types per barangay
                 if (!isset($barangayCrimeTypes[$barangay])) {
                     $barangayCrimeTypes[$barangay] = [];
                 }
-                if (!isset($barangayCrimeTypes[$barangay][$crimeType])) {
-                    $barangayCrimeTypes[$barangay][$crimeType] = 0;
-                }
-                $barangayCrimeTypes[$barangay][$crimeType] += $count;
+                $barangayCrimeTypes[$barangay][$crimeType] = ($barangayCrimeTypes[$barangay][$crimeType] ?? 0) + $count;
             }
             fclose($file);
-            
+
+            // ── 2. Live DB reports (validated) ─────────────────────
+            try {
+                $dbQuery = DB::table('reports')
+                    ->join('locations', 'reports.location_id', '=', 'locations.location_id')
+                    ->select('reports.report_type', 'locations.barangay', 'reports.created_at')
+                    ->where('reports.is_valid', self::REPORT_VALID);
+
+                if ($month && preg_match('/^\d{4}-\d{2}$/', $month)) {
+                    [$y, $m] = explode('-', $month);
+                    $dbQuery->whereYear('reports.created_at', $y)
+                            ->whereMonth('reports.created_at', intval($m));
+                } elseif ($year) {
+                    $dbQuery->whereYear('reports.created_at', $year);
+                }
+
+                $dbRows = $dbQuery->limit(10000)->get();
+
+                foreach ($dbRows as $row) {
+                    $barangay = trim((string)($row->barangay ?? ''));
+                    if ($barangay === '') continue;
+
+                    $types = $this->normalizeReportTypes($row->report_type);
+                    foreach ($types as $rawType) {
+                        $crimeType = strtoupper(trim($rawType));
+                        if ($crimeType === '') continue;
+
+                        $barangayData[$barangay] = ($barangayData[$barangay] ?? 0) + 1;
+
+                        if (!isset($barangayCrimeTypes[$barangay])) {
+                            $barangayCrimeTypes[$barangay] = [];
+                        }
+                        $barangayCrimeTypes[$barangay][$crimeType] = ($barangayCrimeTypes[$barangay][$crimeType] ?? 0) + 1;
+                    }
+                }
+            } catch (\Exception $e) {
+                \Log::warning('DB barangay stats merge failed, using CSV only: ' . $e->getMessage());
+            }
+
+            // ── 3. Build result ────────────────────────────────────
             $result = [];
             foreach ($barangayData as $barangay => $totalCrimes) {
                 // Sort crime types by count descending and get top 5
@@ -1020,31 +1171,50 @@ class StatisticsController extends Controller
 
     /**
      * Clear all statistics caches
-     * Useful when CSV files are updated
+     * Useful when CSV files are updated or reports change
      */
     public function clearCache()
     {
         try {
-            // Clear all statistics-related caches
-            Cache::forget('crime_stats_data');
-            Cache::forget('barangay_crime_stats');
+            $cleared = [];
+
+            // Clear crime stats caches (with and without filters)
+            foreach (['crime_stats_data_v3', 'crime_stats_data_v2'] as $prefix) {
+                Cache::forget($prefix);
+                $cleared[] = $prefix;
+            }
+
+            // Clear barangay stats caches
+            foreach (['barangay_crime_stats_v3', 'barangay_crime_stats_v2'] as $prefix) {
+                Cache::forget($prefix);
+                $cleared[] = $prefix;
+            }
             
             // Clear all forecast horizon caches (6, 12, 18, 24 months)
             foreach ([6, 12, 18, 24] as $horizon) {
-                Cache::forget("sarima_forecast_{$horizon}");
+                Cache::forget("sarima_forecast_full_{$horizon}");
+                $cleared[] = "sarima_forecast_full_{$horizon}";
             }
+
+            // Clear barangay risk caches
+            foreach ([3, 6, 12] as $m) {
+                Cache::forget("sarima_barangay_risk_v2_{$m}");
+                Cache::forget("sarima_barangay_risk_{$m}");
+                $cleared[] = "sarima_barangay_risk_v2_{$m}";
+            }
+
+            // Clear monthly warning caches
+            Cache::forget('sarima_monthly_warning_current');
+            $cleared[] = 'sarima_monthly_warning_current';
+
+            // Clear insights caches (pattern-based, clear common variants)
+            Cache::forget('statistics_insights_v1');
+            $cleared[] = 'statistics_insights_v1';
             
             return response()->json([
                 'status' => 'success',
                 'message' => 'All statistics caches cleared successfully',
-                'cleared' => [
-                    'crime_stats_data',
-                    'barangay_crime_stats',
-                    'sarima_forecast_6',
-                    'sarima_forecast_12',
-                    'sarima_forecast_18',
-                    'sarima_forecast_24'
-                ]
+                'cleared' => $cleared,
             ]);
         } catch (\Exception $e) {
             return response()->json([
@@ -1181,7 +1351,7 @@ class StatisticsController extends Controller
         try {
             $this->autoStartSarimaApi();
             
-            $cacheKey = "sarima_barangay_risk_{$months}";
+            $cacheKey = "sarima_barangay_risk_v2_{$months}";
             
             $data = Cache::remember($cacheKey, 1800, function () use ($months) {
                 $response = Http::timeout(30)->get("{$this->sarimaApiUrl}/barangay-risk", [
@@ -1194,12 +1364,58 @@ class StatisticsController extends Controller
                 
                 throw new \Exception('Failed to fetch barangay risk: ' . $response->status());
             });
+
+            // ── Supplement with live DB report counts ──────────
+            try {
+                $since = Carbon::now()->subMonths($months);
+                $dbCounts = DB::table('reports')
+                    ->join('locations', 'reports.location_id', '=', 'locations.location_id')
+                    ->select('locations.barangay', DB::raw('COUNT(*) as report_count'))
+                    ->where('reports.is_valid', self::REPORT_VALID)
+                    ->where('reports.created_at', '>=', $since)
+                    ->groupBy('locations.barangay')
+                    ->get()
+                    ->keyBy('barangay');
+
+                // Merge live_reports into each SARIMA barangay entry
+                if (is_array($data)) {
+                    foreach ($data as &$entry) {
+                        $brgy = $entry['barangay'] ?? '';
+                        $dbRow = $dbCounts->get($brgy);
+                        $entry['live_reports'] = $dbRow ? $dbRow->report_count : 0;
+                        // Upgrade risk if many recent reports
+                        if ($entry['live_reports'] >= 5 && ($entry['risk_level'] ?? '') === 'LOW') {
+                            $entry['risk_level'] = 'MODERATE';
+                            $entry['warning'] = ($entry['warning'] ?? '') . ' (elevated by recent reports)';
+                        }
+                    }
+                    unset($entry);
+
+                    // Add DB-only barangays not in SARIMA
+                    $sarimaBarangays = collect($data)->pluck('barangay')->toArray();
+                    foreach ($dbCounts as $brgy => $row) {
+                        if (!in_array($brgy, $sarimaBarangays) && $row->report_count >= 2) {
+                            $risk = $row->report_count >= 10 ? 'HIGH' : ($row->report_count >= 5 ? 'MODERATE' : 'LOW');
+                            $data[] = [
+                                'barangay' => $brgy,
+                                'recent_crimes' => 0,
+                                'live_reports' => $row->report_count,
+                                'risk_level' => $risk,
+                                'warning' => "Based on {$row->report_count} validated report(s)",
+                                'recommended_action' => $risk === 'HIGH' ? 'Increase patrol frequency' : 'Monitor situation',
+                            ];
+                        }
+                    }
+                }
+            } catch (\Exception $e) {
+                \Log::warning('DB supplement for barangay risk failed: ' . $e->getMessage());
+            }
             
             return response()->json([
                 'status' => 'success',
                 'data' => $data,
                 'months' => $months,
-                'source' => 'SARIMA API'
+                'source' => 'SARIMA API + DB reports'
             ]);
         } catch (\Exception $e) {
             return response()->json([

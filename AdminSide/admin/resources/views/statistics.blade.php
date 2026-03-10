@@ -670,7 +670,7 @@
             <div class="forecast-legend">
                 <div class="legend-item">
                     <div class="legend-color" style="background: #1D3557;"></div>
-                    <span>Historical Data</span>
+                    <span>Historical + Reports Data</span>
                 </div>
                 <div class="legend-item">
                     <div class="legend-color" style="background: #E63946;"></div>
@@ -700,7 +700,7 @@
         </div>
         <div class="card-body">
             <p style="color: var(--gray-500); font-size: 0.8rem; margin-bottom: 1rem;">
-                Per-crime-type breakdown derived from SARIMA forecast and historical distribution. Updates with crime type filter and forecast horizon.
+                Per-crime-type breakdown derived from SARIMA forecast, historical records, and validated reports. Updates with crime type filter and forecast horizon.
             </p>
             <div id="forecastBreakdownLoading" style="text-align: center; padding: 1.5rem; display: none;">
                 <div class="spinner"></div>
@@ -717,6 +717,7 @@
         <div class="card">
             <div class="card-header">
                 <h3 class="card-title">📊 Crime Distribution by Type</h3>
+                <span class="data-source-label" style="font-size: 0.7rem; color: var(--gray-400);">Historical + Reports</span>
             </div>
             <div class="card-body">
                 <div class="chart-container">
@@ -727,6 +728,7 @@
         <div class="card">
             <div class="card-header">
                 <h3 class="card-title">📍 Top Crime Locations</h3>
+                <span class="data-source-label" style="font-size: 0.7rem; color: var(--gray-400);">Historical + Reports</span>
             </div>
             <div class="card-body">
                 <div class="chart-container">
@@ -768,13 +770,14 @@
                     <thead>
                         <tr>
                             <th>Barangay</th>
-                            <th style="text-align: center;">Crimes</th>
+                            <th style="text-align: center;">Historical</th>
+                            <th style="text-align: center;">Reports</th>
                             <th style="text-align: center;">Risk</th>
                             <th>Action</th>
                         </tr>
                     </thead>
                     <tbody id="riskTableBody">
-                        <tr><td colspan="4" class="loading-spinner"><div class="spinner"></div></td></tr>
+                        <tr><td colspan="5" class="loading-spinner"><div class="spinner"></div></td></tr>
                     </tbody>
                 </table>
             </div>
@@ -995,6 +998,13 @@ async function loadCrimeStats() {
             renderTypeChart(data.data.byType);
             renderLocationChart(data.data.byLocation);
             renderForecastBreakdown();
+
+            // Show data source indicator
+            const dbCount = data.data.dbReports || 0;
+            const sourceLabel = dbCount > 0 
+                ? `Historical + ${dbCount} validated report(s)` 
+                : 'Historical data';
+            document.querySelectorAll('.data-source-label').forEach(el => el.textContent = sourceLabel);
         }
     } catch (error) {
         console.error('Error loading crime stats:', error);
@@ -1554,7 +1564,7 @@ function renderTrendChart(historical, forecast) {
             labels: allLabels,
             datasets: [
                 {
-                    label: 'Historical Data',
+                    label: 'Historical + Reports',
                     data: historicalDataset,
                     borderColor: '#1D3557',
                     backgroundColor: 'rgba(29, 53, 87, 0.1)',
@@ -1724,7 +1734,7 @@ async function loadBarangayRisk() {
     const months = document.getElementById('riskMonthsFilter').value;
     const tbody = document.getElementById('riskTableBody');
     
-    tbody.innerHTML = '<tr><td colspan="4" class="loading-spinner"><div class="spinner"></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" class="loading-spinner"><div class="spinner"></div></td></tr>';
     
     try {
         const response = await fetch(`/api/statistics/barangay-risk?months=${months}`);
@@ -1732,35 +1742,37 @@ async function loadBarangayRisk() {
         const data = result.data || result;
         
         if (!Array.isArray(data) || data.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--gray-500);">No risk data available</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--gray-500);">No risk data available</td></tr>';
             return;
         }
         
         // Update risk counts
         const highRisk = data.filter(d => d.risk_level === 'HIGH').length;
-        const mediumRisk = data.filter(d => d.risk_level === 'MEDIUM').length;
+        const mediumRisk = data.filter(d => d.risk_level === 'MEDIUM' || d.risk_level === 'MODERATE').length;
         const lowRisk = data.filter(d => d.risk_level === 'LOW').length;
         
         document.getElementById('highRiskCount').textContent = highRisk;
         document.getElementById('mediumRiskCount').textContent = mediumRisk;
         document.getElementById('lowRiskCount').textContent = lowRisk;
         
-        // Render table
+        // Render table with live reports column
         tbody.innerHTML = data.slice(0, 15).map(item => {
             const badgeClass = item.risk_level === 'HIGH' ? 'badge-high' : 
-                              item.risk_level === 'MEDIUM' ? 'badge-medium' : 'badge-low';
+                              (item.risk_level === 'MEDIUM' || item.risk_level === 'MODERATE') ? 'badge-medium' : 'badge-low';
+            const liveReports = item.live_reports ?? 0;
             return `
                 <tr>
                     <td style="font-weight: 500;">${escapeHtml(item.barangay)}</td>
-                    <td style="text-align: center; font-weight: 600;">${item.recent_crimes}</td>
+                    <td style="text-align: center; font-weight: 600;">${item.recent_crimes ?? 0}</td>
+                    <td style="text-align: center; font-weight: 600; color: ${liveReports > 0 ? '#D97706' : 'var(--gray-500)'};">${liveReports}</td>
                     <td style="text-align: center;"><span class="badge ${badgeClass}">${item.risk_level}</span></td>
-                    <td style="font-size: 0.8125rem;">${escapeHtml(item.recommended_action)}</td>
+                    <td style="font-size: 0.8125rem;">${escapeHtml(item.recommended_action || '-')}</td>
                 </tr>
             `;
         }).join('');
     } catch (error) {
         console.error('Error loading risk data:', error);
-        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--danger);">Failed to load risk data</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--danger);">Failed to load risk data</td></tr>';
     }
 }
 
