@@ -1126,7 +1126,7 @@ async function loadForecastInsights() {
                         </div>
                         <p style="color: #991b1b; font-size: 0.85rem; margin: 0;">
                             Overall crime incidents are predicted to rise. <strong>${nextMonth}</strong> forecast: ~<strong>${predictedCount}</strong> incidents.
-                            Consider increasing patrol frequency and officer deployment.
+                            Consider increasing patrol visibility and crime prevention efforts.
                         </p>
                     </div>`;
             }
@@ -1148,7 +1148,7 @@ async function loadForecastInsights() {
                         </div>
                         ${topCrimes ? `<div style="color: #78350f; font-size: 0.75rem; margin-top: 0.25rem;">Top crimes: ${escapeHtml(topCrimes)}</div>` : ''}
                         <div style="color: #92400e; font-size: 0.75rem; margin-top: 0.5rem; font-style: italic;">
-                            ⚠ Deploy additional officers to this area. Prioritize ${topCrimes ? escapeHtml(topCrimes.split(',')[0]) : 'focus crime'} response.
+                            ⚠ Increase patrol presence in this area. Prioritize ${topCrimes ? escapeHtml(topCrimes.split(',')[0]) : 'focus crime'} response.
                         </div>
                     </div>`;
             });
@@ -1168,7 +1168,7 @@ async function loadForecastInsights() {
                                 <strong>${pair.count}</strong> reported incidents — hotspot pattern detected
                             </div>
                             <div style="color: #92400e; font-size: 0.75rem; margin-top: 0.5rem; font-style: italic;">
-                                Deploy ${Math.max(2, Math.ceil(pair.count / 3))} officers for ${escapeHtml(pair.crimeType)} patrol in this barangay.
+                                Increase patrol coverage for ${escapeHtml(pair.crimeType)} in this barangay.
                             </div>
                         </div>`;
                 }

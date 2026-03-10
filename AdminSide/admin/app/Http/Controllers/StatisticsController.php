@@ -30,7 +30,7 @@ class StatisticsController extends Controller
     private function isSarimaApiRunning()
     {
         try {
-            $response = Http::timeout(60)->get("{$this->sarimaApiUrl}/");
+            $response = Http::timeout(10)->get("{$this->sarimaApiUrl}/");
             return $response->successful();
         } catch (\Exception $e) {
             return false;
@@ -83,9 +83,8 @@ class StatisticsController extends Controller
      */
     public function index()
     {
-        // Try to auto-start SARIMA API if in development
-        $this->autoStartSarimaApi();
-        
+        // SARIMA API check removed from page load to prevent blocking.
+        // The frontend AJAX calls will handle API connectivity lazily.
         return view('statistics');
     }
 
@@ -470,14 +469,14 @@ class StatisticsController extends Controller
             // Recommendations
             $recommendations = [];
             if ($patrolOnDuty <= 0 && $activeDispatches > 0) {
-                $recommendations[] = 'No patrol officers are ON DUTY while there are active dispatches. Consider activating at least 1–2 officers immediately.';
+                $recommendations[] = 'Active dispatches exist but no patrol officers appear on duty. Patrol coverage for this period should be reviewed.';
             }
             if ($overdueDispatches > 0) {
-                $recommendations[] = "{$overdueDispatches} dispatch(es) are over the 3-minute response threshold. Review officer assignment and station routing.";
+                $recommendations[] = "{$overdueDispatches} dispatch(es) are over the 3-minute response threshold. Review station routing and dispatch prioritization.";
             }
             $loadRatio = $patrolOnDuty > 0 ? ($activeDispatches / $patrolOnDuty) : null;
             if ($loadRatio !== null && $loadRatio > 2.0) {
-                $recommendations[] = sprintf('High dispatch load: %.2f active dispatches per on-duty officer. Consider adding more officers on-duty or rebalancing stations.', $loadRatio);
+                $recommendations[] = 'Dispatch load is high relative to available coverage. Consider rebalancing resources across stations.';
             }
             if (($invalidReports + $fakeReports) > 0 && ($validReports + $invalidReports + $checkingReports) > 0) {
                 $totalProcessed = ($validReports + $invalidReports + $checkingReports);
@@ -564,19 +563,17 @@ class StatisticsController extends Controller
                 $ratio = $sPatrolOnDuty > 0 ? ($sActive / $sPatrolOnDuty) : null;
 
                 $suggestion = 'OK';
-                if ($sPatrolOnDuty <= 0 && $sActive > 0) {
-                    $suggestion = 'Activate at least 1–2 patrol officers (active dispatches exist).';
-                } elseif ($sOverdue > 0) {
-                    $suggestion = 'Dispatches overdue (3-min). Reassign or add on-duty officers.';
+                if ($sOverdue > 0) {
+                    $suggestion = 'Response times are exceeding the 3-minute threshold. Consider reassigning dispatch coverage for this area.';
+                } elseif ($sPatrolOnDuty <= 0 && $sActive > 0) {
+                    $suggestion = 'Active dispatches exist but no officers appear on duty. Patrol coverage should be reviewed.';
                 } elseif ($ratio !== null && $ratio > 2.0) {
-                    $suggestion = sprintf('High load (%.2f active per on-duty). Add officers or rebalance.', $ratio);
+                    $suggestion = 'Dispatch load is high relative to available coverage. Consider rebalancing resources across stations.';
                 }
 
                 $stations[] = [
                     'station_id' => $sid,
                     'station_name' => $s->station_name,
-                    'patrol_total' => $sPatrolTotal,
-                    'patrol_on_duty' => $sPatrolOnDuty,
                     'active_dispatches' => $sActive,
                     'overdue_dispatches' => $sOverdue,
                     'suggestion' => $suggestion,
@@ -591,8 +588,6 @@ class StatisticsController extends Controller
 
             return [
                 'deployment' => [
-                    'patrol_total' => $patrolTotal,
-                    'patrol_on_duty' => $patrolOnDuty,
                     'active_dispatches' => $activeDispatches,
                     'overdue_dispatches' => $overdueDispatches,
                     'fake_reports' => $fakeReports,
