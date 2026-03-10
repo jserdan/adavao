@@ -806,65 +806,54 @@
         </div>
     </div>
 
-    <!-- Forecast Deployment Insights -->
+    <!-- Forecast-Based Operational Insights -->
     <div class="card" style="margin-bottom: 1.5rem;">
         <div class="card-header">
-            <h3 class="card-title">🚔 Forecast Deployment Insights</h3>
-            <span style="background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 12px; font-size: 0.7rem; font-weight: 600;">AI-POWERED</span>
+            <h3 class="card-title">📋 Operational Insights</h3>
+            <span style="background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 12px; font-size: 0.7rem; font-weight: 600;">FORECAST-BASED</span>
         </div>
         <div class="card-body">
-            <p style="color: var(--gray-500); margin-bottom: 1rem; font-size: 0.8rem;">
-                Actionable deployment recommendations based on SARIMA forecast trends, barangay crime patterns, and station workload analysis.
-            </p>
-
             <div id="forecastInsightsLoading" style="text-align: center; padding: 2rem;">
                 <div class="spinner"></div>
-                <p style="margin-top: 0.5rem; color: var(--gray-500); font-size: 0.8rem;">Analyzing forecast data...</p>
+                <p style="margin-top: 0.5rem; color: var(--gray-500); font-size: 0.8rem;">Generating insights...</p>
             </div>
 
             <div id="forecastInsightsContent" style="display: none;">
-                <!-- Crimes Predicted to Increase -->
-                <div style="margin-bottom: 1.5rem;">
-                    <h4 style="font-size: 0.9rem; font-weight: 700; color: var(--danger); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem;">
-                        📈 Crimes Predicted to Increase
+
+                <!-- Overall Forecast Trend -->
+                <div id="overallTrendCard" style="margin-bottom: 1.25rem;"></div>
+
+                <!-- Priority Areas (needs attention) -->
+                <div style="margin-bottom: 1.25rem;">
+                    <h4 style="font-size: 0.85rem; font-weight: 700; color: #b91c1c; margin-bottom: 0.5rem;">
+                        🔴 Priority Areas — Requires Attention
                     </h4>
-                    <div id="crimesIncreasing" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0.75rem;">
-                        <!-- Populated by JS -->
+                    <div id="priorityAreas" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 0.6rem;">
                     </div>
                 </div>
 
-                <!-- Deployment Suggestions per Area -->
-                <div style="margin-bottom: 1.5rem;">
-                    <h4 style="font-size: 0.9rem; font-weight: 700; color: #1e40af; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem;">
-                        👮 Deployment Suggestions by Area
+                <!-- Station Status -->
+                <div style="margin-bottom: 1.25rem;">
+                    <h4 style="font-size: 0.85rem; font-weight: 700; color: #1e40af; margin-bottom: 0.5rem;">
+                        🏢 Station Dispatch Status
                     </h4>
-                    <div id="deploymentSuggestions">
-                        <table class="data-table" style="width: 100%; font-size: 0.8rem;">
-                            <thead>
-                                <tr>
-                                    <th>Station / Area</th>
-                                    <th>Recommendation</th>
-                                </tr>
-                            </thead>
-                            <tbody id="deploymentTableBody">
-                            </tbody>
-                        </table>
+                    <div id="stationStatusGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0.6rem;">
                     </div>
                 </div>
 
-                <!-- Well-Managed Areas -->
+                <!-- Stable / Well-Managed -->
                 <div>
-                    <h4 style="font-size: 0.9rem; font-weight: 700; color: var(--success); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem;">
-                        ✅ Well-Managed Crime Areas
+                    <h4 style="font-size: 0.85rem; font-weight: 700; color: #15803d; margin-bottom: 0.5rem;">
+                        🟢 Stable — Well-Managed
                     </h4>
-                    <div id="wellManagedAreas" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0.75rem;">
-                        <!-- Populated by JS -->
+                    <div id="stableAreas" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 0.6rem;">
                     </div>
                 </div>
+
             </div>
 
             <div id="forecastInsightsError" style="display: none; text-align: center; padding: 1.5rem; background: #fef2f2; border-radius: 8px; border: 1px solid #fecaca;">
-                <p style="color: #dc2626; font-weight: 600;">Unable to generate deployment insights</p>
+                <p style="color: #dc2626; font-weight: 600;">Unable to generate insights</p>
                 <p style="color: #7f1d1d; font-size: 0.8rem;">Ensure the SARIMA API is online and forecast data is available.</p>
             </div>
         </div>
@@ -1097,7 +1086,7 @@ function renderRecommendations(recommendations) {
     }).join('');
 }
 
-// Load Forecast Deployment Insights
+// Load Forecast-Based Operational Insights
 async function loadForecastInsights() {
     const loadingEl = document.getElementById('forecastInsightsLoading');
     const contentEl = document.getElementById('forecastInsightsContent');
@@ -1108,7 +1097,6 @@ async function loadForecastInsights() {
     errorEl.style.display = 'none';
 
     try {
-        // Fetch insights (stations + correlation + seasonality) and forecast in parallel
         const params = new URLSearchParams();
         if (currentFilter.month) params.append('month', currentFilter.month);
         else if (currentFilter.year) params.append('year', currentFilter.year);
@@ -1128,202 +1116,192 @@ async function loadForecastInsights() {
         const forecast = forecastJson.status === 'success' ? (forecastJson.data || forecastJson) : null;
         const riskData = riskJson.status === 'success' ? riskJson.data : null;
 
-        if (!insights && !forecast) {
-            throw new Error('No data available');
-        }
+        if (!insights && !forecast) throw new Error('No data available');
 
-        // --- 1. Crimes Predicted to Increase ---
-        const increasingEl = document.getElementById('crimesIncreasing');
-        let increasingHtml = '';
-
-        // Analyze forecast trend: compare first 3 months avg vs last 3 months avg
+        // ── Compute overall forecast trend ──
+        let changePct = 0, nextMonth = '', predictedCount = 0;
         if (forecast && Array.isArray(forecast) && forecast.length >= 2) {
             const half = Math.floor(forecast.length / 2);
-            const firstHalf = forecast.slice(0, half);
-            const secondHalf = forecast.slice(half);
-            const avgFirst = firstHalf.reduce((s, d) => s + parseFloat(d.forecast || 0), 0) / firstHalf.length;
-            const avgSecond = secondHalf.reduce((s, d) => s + parseFloat(d.forecast || 0), 0) / secondHalf.length;
-            const changePct = avgFirst > 0 ? ((avgSecond - avgFirst) / avgFirst * 100).toFixed(1) : 0;
-            const nextMonth = forecast[0]?.date?.substring(0, 7) || 'Next Period';
-            const predictedCount = parseFloat(forecast[0]?.forecast || 0).toFixed(0);
-
-            if (changePct > 0) {
-                increasingHtml += `
-                    <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 1rem;">
-                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
-                            <span style="color: #dc2626; font-weight: 700; font-size: 1.25rem;">↑ ${changePct}%</span>
-                            <span style="color: #7f1d1d; font-size: 0.8rem;">projected increase</span>
-                        </div>
-                        <p style="color: #991b1b; font-size: 0.85rem; margin: 0;">
-                            Overall crime incidents are predicted to rise. <strong>${nextMonth}</strong> forecast: ~<strong>${predictedCount}</strong> incidents.
-                            Consider increasing patrol visibility and crime prevention efforts.
-                        </p>
-                    </div>`;
-            }
+            const avgFirst = forecast.slice(0, half).reduce((s, d) => s + parseFloat(d.forecast || 0), 0) / half;
+            const avgSecond = forecast.slice(half).reduce((s, d) => s + parseFloat(d.forecast || 0), 0) / (forecast.length - half);
+            changePct = avgFirst > 0 ? ((avgSecond - avgFirst) / avgFirst * 100) : 0;
+            nextMonth = forecast[0]?.date?.substring(0, 7) || 'Next Period';
+            predictedCount = parseFloat(forecast[0]?.forecast || 0).toFixed(0);
         }
 
-        // Analyze barangay risk: show HIGH risk areas with top crimes
+        // ═══════════════════════════════════════════
+        // 1. OVERALL TREND CARD
+        // ═══════════════════════════════════════════
+        const trendEl = document.getElementById('overallTrendCard');
+        const isRising = changePct > 2;
+        const isFalling = changePct < -2;
+        const trendBg = isRising ? '#fef2f2' : (isFalling ? '#f0fdf4' : '#f8fafc');
+        const trendBorder = isRising ? '#fecaca' : (isFalling ? '#bbf7d0' : '#e2e8f0');
+        const trendArrow = isRising ? '↑' : (isFalling ? '↓' : '→');
+        const trendColor = isRising ? '#dc2626' : (isFalling ? '#16a34a' : '#475569');
+        const trendLabel = isRising ? 'Projected Increase' : (isFalling ? 'Projected Decrease' : 'Stable Trend');
+        const trendMsg = isRising
+            ? `Crime activity is projected to rise over the next 6 months. Next month (${nextMonth}): ~${predictedCount} incidents expected. Heightened patrol visibility and proactive response recommended.`
+            : (isFalling
+                ? `Crime activity is projected to decline. Current strategies are effective — maintain operational tempo and continue monitoring.`
+                : `Crime activity is projected to remain steady. Maintain current patrol schedules and continue monitoring emerging patterns.`);
+
+        trendEl.innerHTML = `
+            <div style="background: ${trendBg}; border: 1px solid ${trendBorder}; border-radius: 8px; padding: 0.85rem; display: flex; align-items: flex-start; gap: 0.75rem;">
+                <span style="color: ${trendColor}; font-weight: 800; font-size: 1.4rem; line-height: 1;">${trendArrow} ${Math.abs(changePct).toFixed(1)}%</span>
+                <div>
+                    <div style="font-weight: 700; font-size: 0.82rem; color: ${trendColor}; margin-bottom: 0.2rem;">${trendLabel}</div>
+                    <div style="font-size: 0.78rem; color: #374151; line-height: 1.4;">${trendMsg}</div>
+                </div>
+            </div>`;
+
+        // ═══════════════════════════════════════════
+        // 2. PRIORITY AREAS (High-risk barangays + hotspots)
+        // ═══════════════════════════════════════════
+        const priorityEl = document.getElementById('priorityAreas');
+        let priorityHtml = '';
+
+        // High-risk barangays from SARIMA barangay-risk
         if (riskData && Array.isArray(riskData)) {
             const highRisk = riskData.filter(b => b.risk_level === 'HIGH' || b.risk_level === 'CRITICAL');
             highRisk.slice(0, 4).forEach(area => {
-                const topCrimes = (area.top_crimes || []).slice(0, 2).map(c => c.crime_type || c).join(', ');
-                const totalCrimes = area.total_crimes || area.crime_count || '?';
-                increasingHtml += `
-                    <div style="background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 1rem;">
-                        <div style="font-weight: 700; color: #9a3412; font-size: 0.85rem; margin-bottom: 0.25rem;">
-                            📍 ${escapeHtml(area.barangay)}
-                        </div>
-                        <div style="color: #c2410c; font-size: 0.8rem;">
-                            <strong>${totalCrimes}</strong> incidents (3 months) — ${area.risk_level} risk
-                        </div>
-                        ${topCrimes ? `<div style="color: #78350f; font-size: 0.75rem; margin-top: 0.25rem;">Top crimes: ${escapeHtml(topCrimes)}</div>` : ''}
-                        <div style="color: #92400e; font-size: 0.75rem; margin-top: 0.5rem; font-style: italic;">
-                            ⚠ Increase patrol presence in this area. Prioritize ${topCrimes ? escapeHtml(topCrimes.split(',')[0]) : 'focus crime'} response.
-                        </div>
+                const crimes = area.recent_crimes || '?';
+                priorityHtml += `
+                    <div style="background: #fff7ed; border-left: 4px solid #ea580c; border-radius: 6px; padding: 0.7rem 0.8rem;">
+                        <div style="font-weight: 700; color: #9a3412; font-size: 0.82rem;">📍 ${escapeHtml(area.barangay)}</div>
+                        <div style="font-size: 0.75rem; color: #c2410c; margin-top: 0.2rem;">${crimes} incidents in 3 months — <strong>${area.risk_level}</strong> risk</div>
+                        <div style="font-size: 0.73rem; color: #78350f; margin-top: 0.3rem;">↳ Increase visibility and response readiness in this area.</div>
                     </div>`;
             });
         }
 
-        // Also use correlation data for crime-type specific insights
+        // Crime-barangay hotspot pairs from correlation
         if (insights && insights.correlation && insights.correlation.topPairs) {
-            const topPairs = insights.correlation.topPairs.slice(0, 3);
-            topPairs.forEach(pair => {
+            insights.correlation.topPairs.slice(0, 4).forEach(pair => {
                 if (pair.count >= 3) {
-                    increasingHtml += `
-                        <div style="background: #fefce8; border: 1px solid #fef08a; border-radius: 8px; padding: 1rem;">
-                            <div style="font-weight: 700; color: #854d0e; font-size: 0.85rem; margin-bottom: 0.25rem;">
-                                🔥 ${escapeHtml(pair.crimeType)} in ${escapeHtml(pair.barangay)}
-                            </div>
-                            <div style="color: #713f12; font-size: 0.8rem;">
-                                <strong>${pair.count}</strong> reported incidents — hotspot pattern detected
-                            </div>
-                            <div style="color: #92400e; font-size: 0.75rem; margin-top: 0.5rem; font-style: italic;">
-                                Increase patrol coverage for ${escapeHtml(pair.crimeType)} in this barangay.
-                            </div>
+                    priorityHtml += `
+                        <div style="background: #fefce8; border-left: 4px solid #ca8a04; border-radius: 6px; padding: 0.7rem 0.8rem;">
+                            <div style="font-weight: 700; color: #854d0e; font-size: 0.82rem;">🔥 ${escapeHtml(pair.crimeType)} — ${escapeHtml(pair.barangay)}</div>
+                            <div style="font-size: 0.75rem; color: #713f12; margin-top: 0.2rem;">${pair.count} incidents — recurring pattern detected</div>
+                            <div style="font-size: 0.73rem; color: #78350f; margin-top: 0.3rem;">↳ Targeted patrol coverage recommended for this crime type in this area.</div>
                         </div>`;
                 }
             });
         }
 
-        if (!increasingHtml) {
-            increasingHtml = `<div style="color: var(--gray-500); font-size: 0.85rem; padding: 0.75rem;">No significant crime increase patterns detected in the current forecast period.</div>`;
+        // Stations with issues
+        if (insights && insights.stations) {
+            insights.stations.filter(s => s.suggestion !== 'OK' || s.overdue_dispatches > 0).forEach(station => {
+                const isOverdue = station.overdue_dispatches > 0;
+                priorityHtml += `
+                    <div style="background: ${isOverdue ? '#fef2f2' : '#fffbeb'}; border-left: 4px solid ${isOverdue ? '#dc2626' : '#d97706'}; border-radius: 6px; padding: 0.7rem 0.8rem;">
+                        <div style="font-weight: 700; color: ${isOverdue ? '#991b1b' : '#92400e'}; font-size: 0.82rem;">🏢 ${escapeHtml(station.station_name)}</div>
+                        <div style="font-size: 0.75rem; color: ${isOverdue ? '#dc2626' : '#b45309'}; margin-top: 0.2rem;">${isOverdue ? station.overdue_dispatches + ' overdue dispatch(es)' : 'Dispatch load elevated'}</div>
+                        <div style="font-size: 0.73rem; color: #374151; margin-top: 0.3rem;">↳ ${escapeHtml(station.suggestion)}</div>
+                    </div>`;
+            });
         }
-        increasingEl.innerHTML = increasingHtml;
 
-        // --- 2. Deployment Suggestions by Station ---
-        const deployBody = document.getElementById('deploymentTableBody');
-        let deployHtml = '';
+        if (!priorityHtml) {
+            priorityHtml = '<div style="color: #6b7280; font-size: 0.8rem; padding: 0.5rem;">No priority concerns identified. All areas are within normal parameters.</div>';
+        }
+        priorityEl.innerHTML = priorityHtml;
+
+        // ═══════════════════════════════════════════
+        // 3. STATION DISPATCH STATUS (compact grid)
+        // ═══════════════════════════════════════════
+        const stationEl = document.getElementById('stationStatusGrid');
+        let stationHtml = '';
 
         if (insights && insights.stations && insights.stations.length > 0) {
             insights.stations.forEach(station => {
-                const isOk = station.suggestion === 'OK';
-                const rowBg = station.overdue_dispatches > 0 ? '#fef2f2' : (isOk ? '#f0fdf4' : '#fffbeb');
-                const sugColor = station.overdue_dispatches > 0 ? '#dc2626' : (isOk ? '#16a34a' : '#d97706');
-                const sugText = isOk 
-                    ? 'Operations normal. Crime rate well managed in this area.' 
-                    : station.suggestion;
-                
-                deployHtml += `
-                    <tr style="background: ${rowBg};">
-                        <td style="font-weight: 600;">${escapeHtml(station.station_name)}</td>
-                        <td style="color: ${sugColor}; font-size: 0.8rem;">${escapeHtml(sugText)}</td>
-                    </tr>`;
+                const isOk = station.suggestion === 'OK' && station.overdue_dispatches === 0;
+                const hasOverdue = station.overdue_dispatches > 0;
+                const dot = isOk ? '🟢' : (hasOverdue ? '🔴' : '🟡');
+                const bg = isOk ? '#f0fdf4' : (hasOverdue ? '#fef2f2' : '#fffbeb');
+                const border = isOk ? '#bbf7d0' : (hasOverdue ? '#fecaca' : '#fef08a');
+                const statusLabel = isOk ? 'Normal Operations' : (hasOverdue ? 'Overdue Dispatches' : 'Elevated Load');
+                const statusColor = isOk ? '#15803d' : (hasOverdue ? '#dc2626' : '#b45309');
+                const dispatchInfo = station.active_dispatches > 0 ? `${station.active_dispatches} active` : 'No active';
+
+                stationHtml += `
+                    <div style="background: ${bg}; border: 1px solid ${border}; border-radius: 6px; padding: 0.6rem 0.75rem; display: flex; align-items: center; gap: 0.5rem;">
+                        <span style="font-size: 0.9rem;">${dot}</span>
+                        <div style="flex: 1; min-width: 0;">
+                            <div style="font-weight: 600; font-size: 0.8rem; color: #1f2937; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(station.station_name)}</div>
+                            <div style="font-size: 0.7rem; color: ${statusColor};">${statusLabel} · ${dispatchInfo} dispatch(es)</div>
+                        </div>
+                    </div>`;
             });
         } else {
-            deployHtml = `<tr><td colspan="2" style="text-align: center; color: var(--gray-500); padding: 1rem;">No station data available.</td></tr>`;
+            stationHtml = '<div style="color: #6b7280; font-size: 0.8rem; padding: 0.5rem;">No station data available.</div>';
         }
-        deployBody.innerHTML = deployHtml;
+        stationEl.innerHTML = stationHtml;
 
-        // --- 3. Well-Managed Areas ---
-        const wellManagedEl = document.getElementById('wellManagedAreas');
-        let wellManagedHtml = '';
+        // ═══════════════════════════════════════════
+        // 4. STABLE / WELL-MANAGED
+        // ═══════════════════════════════════════════
+        const stableEl = document.getElementById('stableAreas');
+        let stableHtml = '';
 
-        // Check forecast: if overall trend is declining, highlight that
-        if (forecast && Array.isArray(forecast) && forecast.length >= 2) {
-            const half = Math.floor(forecast.length / 2);
-            const firstHalf = forecast.slice(0, half);
-            const secondHalf = forecast.slice(half);
-            const avgFirst = firstHalf.reduce((s, d) => s + parseFloat(d.forecast || 0), 0) / firstHalf.length;
-            const avgSecond = secondHalf.reduce((s, d) => s + parseFloat(d.forecast || 0), 0) / secondHalf.length;
-            const changePct = avgFirst > 0 ? ((avgSecond - avgFirst) / avgFirst * 100).toFixed(1) : 0;
-
-            if (changePct <= 0) {
-                wellManagedHtml += `
-                    <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 1rem;">
-                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
-                            <span style="color: #16a34a; font-weight: 700; font-size: 1.25rem;">↓ ${Math.abs(changePct)}%</span>
-                            <span style="color: #166534; font-size: 0.8rem;">projected decrease</span>
-                        </div>
-                        <p style="color: #14532d; font-size: 0.85rem; margin: 0;">
-                            Overall crime rate is well managed and predicted to decrease. Current policing strategies are effective — maintain current deployment levels.
-                        </p>
-                    </div>`;
-            }
-        }
-
-        // Stations with OK status = well-managed
-        if (insights && insights.stations) {
-            const okStations = insights.stations.filter(s => s.suggestion === 'OK' && s.overdue_dispatches === 0);
-            okStations.slice(0, 4).forEach(station => {
-                wellManagedHtml += `
-                    <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 1rem;">
-                        <div style="font-weight: 700; color: #166534; font-size: 0.85rem; margin-bottom: 0.25rem;">
-                            🏢 ${escapeHtml(station.station_name)}
-                        </div>
-                        <div style="color: #166534; font-size: 0.75rem; margin-top: 0.25rem;">
-                            ✅ No overdue dispatches. Crime rate well managed in this area.
-                        </div>
-                    </div>`;
-            });
+        // Declining overall trend
+        if (isFalling) {
+            stableHtml += `
+                <div style="background: #f0fdf4; border-left: 4px solid #16a34a; border-radius: 6px; padding: 0.7rem 0.8rem;">
+                    <div style="font-weight: 700; color: #166534; font-size: 0.82rem;">📉 Declining Crime Trend</div>
+                    <div style="font-size: 0.75rem; color: #15803d; margin-top: 0.2rem;">Forecast shows a ${Math.abs(changePct).toFixed(1)}% decrease. Current approach is working — maintain operational tempo.</div>
+                </div>`;
         }
 
         // Low-risk barangays
         if (riskData && Array.isArray(riskData)) {
             const lowRisk = riskData.filter(b => b.risk_level === 'LOW');
             if (lowRisk.length > 0) {
-                wellManagedHtml += `
-                    <div style="background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; padding: 1rem;">
-                        <div style="font-weight: 700; color: #065f46; font-size: 0.85rem; margin-bottom: 0.25rem;">
-                            🏘️ ${lowRisk.length} Low-Risk Barangay${lowRisk.length > 1 ? 's' : ''}
-                        </div>
-                        <div style="color: #047857; font-size: 0.8rem;">
-                            ${lowRisk.slice(0, 5).map(b => escapeHtml(b.barangay)).join(', ')}${lowRisk.length > 5 ? ` and ${lowRisk.length - 5} more` : ''}
-                        </div>
-                        <div style="color: #065f46; font-size: 0.75rem; margin-top: 0.25rem;">
-                            ✅ These areas show low crime activity. Current policing strategy is effective.
-                        </div>
+                const names = lowRisk.slice(0, 6).map(b => escapeHtml(b.barangay)).join(', ');
+                const extra = lowRisk.length > 6 ? ` +${lowRisk.length - 6} more` : '';
+                stableHtml += `
+                    <div style="background: #ecfdf5; border-left: 4px solid #10b981; border-radius: 6px; padding: 0.7rem 0.8rem;">
+                        <div style="font-weight: 700; color: #065f46; font-size: 0.82rem;">🏘️ ${lowRisk.length} Low-Risk Barangay${lowRisk.length !== 1 ? 's' : ''}</div>
+                        <div style="font-size: 0.75rem; color: #047857; margin-top: 0.2rem;">${names}${extra}</div>
+                        <div style="font-size: 0.73rem; color: #065f46; margin-top: 0.3rem;">↳ Crime activity within normal levels. Maintain regular patrol schedule.</div>
+                    </div>`;
+            }
+
+            const medRisk = riskData.filter(b => b.risk_level === 'MEDIUM');
+            if (medRisk.length > 0) {
+                const medNames = medRisk.slice(0, 4).map(b => escapeHtml(b.barangay)).join(', ');
+                const medExtra = medRisk.length > 4 ? ` +${medRisk.length - 4} more` : '';
+                stableHtml += `
+                    <div style="background: #eff6ff; border-left: 4px solid #3b82f6; border-radius: 6px; padding: 0.7rem 0.8rem;">
+                        <div style="font-weight: 700; color: #1e40af; font-size: 0.82rem;">📊 ${medRisk.length} Moderate-Risk Barangay${medRisk.length !== 1 ? 's' : ''}</div>
+                        <div style="font-size: 0.75rem; color: #2563eb; margin-top: 0.2rem;">${medNames}${medExtra}</div>
+                        <div style="font-size: 0.73rem; color: #1e3a8a; margin-top: 0.3rem;">↳ Crime above baseline but manageable. Monitor for emerging patterns.</div>
                     </div>`;
             }
         }
 
-        // Seasonality-based insight
+        // Seasonal insight
         if (insights && insights.seasonality && insights.seasonality.monthAverages) {
-            const currentMonth = new Date().getMonth() + 1;
-            const currentMonthData = insights.seasonality.monthAverages.find(m => m.month === currentMonth);
-            const topMonth = insights.seasonality.topMonths && insights.seasonality.topMonths[0];
-            if (currentMonthData && topMonth && currentMonthData.month !== topMonth.month) {
-                const ratio = topMonth.averageCount > 0 ? (currentMonthData.averageCount / topMonth.averageCount * 100).toFixed(0) : 0;
+            const mo = new Date().getMonth() + 1;
+            const curMo = insights.seasonality.monthAverages.find(m => m.month === mo);
+            const peakMo = insights.seasonality.topMonths?.[0];
+            if (curMo && peakMo && curMo.month !== peakMo.month) {
+                const ratio = peakMo.averageCount > 0 ? (curMo.averageCount / peakMo.averageCount * 100).toFixed(0) : 0;
                 if (ratio < 80) {
-                    wellManagedHtml += `
-                        <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 1rem;">
-                            <div style="font-weight: 700; color: #1e40af; font-size: 0.85rem; margin-bottom: 0.25rem;">
-                                📅 Seasonal Insight
-                            </div>
-                            <div style="color: #1d4ed8; font-size: 0.8rem;">
-                                This month historically sees ${ratio}% of peak-month crime levels (peak: ${escapeHtml(topMonth.monthName)}).
-                            </div>
-                            <div style="color: #1e3a8a; font-size: 0.75rem; margin-top: 0.25rem;">
-                                Current period is comparatively well-managed. Prepare for increased activity towards ${escapeHtml(topMonth.monthName)}.
-                            </div>
+                    stableHtml += `
+                        <div style="background: #faf5ff; border-left: 4px solid #8b5cf6; border-radius: 6px; padding: 0.7rem 0.8rem;">
+                            <div style="font-weight: 700; color: #5b21b6; font-size: 0.82rem;">📅 Seasonal Context</div>
+                            <div style="font-size: 0.75rem; color: #6d28d9; margin-top: 0.2rem;">Current month is at ${ratio}% of peak activity (peak: ${escapeHtml(peakMo.monthName)}).</div>
+                            <div style="font-size: 0.73rem; color: #4c1d95; margin-top: 0.3rem;">↳ Favorable period. Plan ahead for increased activity approaching ${escapeHtml(peakMo.monthName)}.</div>
                         </div>`;
                 }
             }
         }
 
-        if (!wellManagedHtml) {
-            wellManagedHtml = `<div style="color: var(--gray-500); font-size: 0.85rem; padding: 0.75rem;">Insufficient data to identify well-managed areas at this time.</div>`;
+        if (!stableHtml) {
+            stableHtml = '<div style="color: #6b7280; font-size: 0.8rem; padding: 0.5rem;">Insufficient data for this assessment.</div>';
         }
-        wellManagedEl.innerHTML = wellManagedHtml;
+        stableEl.innerHTML = stableHtml;
 
         // Show content
         loadingEl.style.display = 'none';
