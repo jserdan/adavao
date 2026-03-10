@@ -782,6 +782,73 @@
         </div>
     </div>
 
+    <!-- Forecast Deployment Insights -->
+    <div class="card" style="margin-bottom: 1.5rem;">
+        <div class="card-header">
+            <h3 class="card-title">🚔 Forecast Deployment Insights</h3>
+            <span style="background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 12px; font-size: 0.7rem; font-weight: 600;">AI-POWERED</span>
+        </div>
+        <div class="card-body">
+            <p style="color: var(--gray-500); margin-bottom: 1rem; font-size: 0.8rem;">
+                Actionable deployment recommendations based on SARIMA forecast trends, barangay crime patterns, and station workload analysis.
+            </p>
+
+            <div id="forecastInsightsLoading" style="text-align: center; padding: 2rem;">
+                <div class="spinner"></div>
+                <p style="margin-top: 0.5rem; color: var(--gray-500); font-size: 0.8rem;">Analyzing forecast data...</p>
+            </div>
+
+            <div id="forecastInsightsContent" style="display: none;">
+                <!-- Crimes Predicted to Increase -->
+                <div style="margin-bottom: 1.5rem;">
+                    <h4 style="font-size: 0.9rem; font-weight: 700; color: var(--danger); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem;">
+                        📈 Crimes Predicted to Increase
+                    </h4>
+                    <div id="crimesIncreasing" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0.75rem;">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+
+                <!-- Deployment Suggestions per Area -->
+                <div style="margin-bottom: 1.5rem;">
+                    <h4 style="font-size: 0.9rem; font-weight: 700; color: #1e40af; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem;">
+                        👮 Deployment Suggestions by Area
+                    </h4>
+                    <div id="deploymentSuggestions">
+                        <table class="data-table" style="width: 100%; font-size: 0.8rem;">
+                            <thead>
+                                <tr>
+                                    <th>Station / Area</th>
+                                    <th style="text-align: center;">Officers On Duty</th>
+                                    <th style="text-align: center;">Active Dispatches</th>
+                                    <th style="text-align: center;">Overdue</th>
+                                    <th>Recommendation</th>
+                                </tr>
+                            </thead>
+                            <tbody id="deploymentTableBody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Well-Managed Areas -->
+                <div>
+                    <h4 style="font-size: 0.9rem; font-weight: 700; color: var(--success); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem;">
+                        ✅ Well-Managed Crime Areas
+                    </h4>
+                    <div id="wellManagedAreas" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0.75rem;">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+            </div>
+
+            <div id="forecastInsightsError" style="display: none; text-align: center; padding: 1.5rem; background: #fef2f2; border-radius: 8px; border: 1px solid #fecaca;">
+                <p style="color: #dc2626; font-weight: 600;">Unable to generate deployment insights</p>
+                <p style="color: #7f1d1d; font-size: 0.8rem;">Ensure the SARIMA API is online and forecast data is available.</p>
+            </div>
+        </div>
+    </div>
+
     <!-- Data Export -->
     <div class="card">
         <div class="card-header">
@@ -837,6 +904,7 @@ document.addEventListener('DOMContentLoaded', function() {
     loadInsights();
     loadBarangayRisk();
     loadMonthlyWarning();
+    loadForecastInsights();
 });
 
 function populateYearFilter() {
@@ -885,6 +953,7 @@ function applyFilter() {
     
     loadCrimeStats();
     loadInsights();
+    loadForecastInsights();
 }
 
 function clearFilter() {
@@ -894,6 +963,7 @@ function clearFilter() {
     document.getElementById('filterStatus').textContent = 'Showing: All data';
     loadCrimeStats();
     loadInsights();
+    loadForecastInsights();
 }
 
 // Load Crime Statistics
@@ -1002,6 +1072,251 @@ function renderRecommendations(recommendations) {
         const icon = isAlert ? '⚠' : 'ℹ';
         return `<li><span class="recommendation-icon ${iconClass}">${icon}</span>${escapeHtml(rec)}</li>`;
     }).join('');
+}
+
+// Load Forecast Deployment Insights
+async function loadForecastInsights() {
+    const loadingEl = document.getElementById('forecastInsightsLoading');
+    const contentEl = document.getElementById('forecastInsightsContent');
+    const errorEl = document.getElementById('forecastInsightsError');
+
+    loadingEl.style.display = 'block';
+    contentEl.style.display = 'none';
+    errorEl.style.display = 'none';
+
+    try {
+        // Fetch insights (stations + correlation + seasonality) and forecast in parallel
+        const params = new URLSearchParams();
+        if (currentFilter.month) params.append('month', currentFilter.month);
+        else if (currentFilter.year) params.append('year', currentFilter.year);
+        const qs = params.toString() ? '?' + params : '';
+
+        const [insightsRes, forecastRes, riskRes] = await Promise.all([
+            fetch('/api/statistics/insights' + qs),
+            fetch('/api/statistics/forecast?horizon=6'),
+            fetch('/api/statistics/barangay-risk?months=3')
+        ]);
+
+        const insightsJson = await insightsRes.json();
+        const forecastJson = await forecastRes.json();
+        const riskJson = await riskRes.json();
+
+        const insights = insightsJson.status === 'success' ? insightsJson.data : null;
+        const forecast = forecastJson.status === 'success' ? (forecastJson.data || forecastJson) : null;
+        const riskData = riskJson.status === 'success' ? riskJson.data : null;
+
+        if (!insights && !forecast) {
+            throw new Error('No data available');
+        }
+
+        // --- 1. Crimes Predicted to Increase ---
+        const increasingEl = document.getElementById('crimesIncreasing');
+        let increasingHtml = '';
+
+        // Analyze forecast trend: compare first 3 months avg vs last 3 months avg
+        if (forecast && Array.isArray(forecast) && forecast.length >= 2) {
+            const half = Math.floor(forecast.length / 2);
+            const firstHalf = forecast.slice(0, half);
+            const secondHalf = forecast.slice(half);
+            const avgFirst = firstHalf.reduce((s, d) => s + parseFloat(d.forecast || 0), 0) / firstHalf.length;
+            const avgSecond = secondHalf.reduce((s, d) => s + parseFloat(d.forecast || 0), 0) / secondHalf.length;
+            const changePct = avgFirst > 0 ? ((avgSecond - avgFirst) / avgFirst * 100).toFixed(1) : 0;
+            const nextMonth = forecast[0]?.date?.substring(0, 7) || 'Next Period';
+            const predictedCount = parseFloat(forecast[0]?.forecast || 0).toFixed(0);
+
+            if (changePct > 0) {
+                increasingHtml += `
+                    <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 1rem;">
+                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                            <span style="color: #dc2626; font-weight: 700; font-size: 1.25rem;">↑ ${changePct}%</span>
+                            <span style="color: #7f1d1d; font-size: 0.8rem;">projected increase</span>
+                        </div>
+                        <p style="color: #991b1b; font-size: 0.85rem; margin: 0;">
+                            Overall crime incidents are predicted to rise. <strong>${nextMonth}</strong> forecast: ~<strong>${predictedCount}</strong> incidents.
+                            Consider increasing patrol frequency and officer deployment.
+                        </p>
+                    </div>`;
+            }
+        }
+
+        // Analyze barangay risk: show HIGH risk areas with top crimes
+        if (riskData && Array.isArray(riskData)) {
+            const highRisk = riskData.filter(b => b.risk_level === 'HIGH' || b.risk_level === 'CRITICAL');
+            highRisk.slice(0, 4).forEach(area => {
+                const topCrimes = (area.top_crimes || []).slice(0, 2).map(c => c.crime_type || c).join(', ');
+                const totalCrimes = area.total_crimes || area.crime_count || '?';
+                increasingHtml += `
+                    <div style="background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 1rem;">
+                        <div style="font-weight: 700; color: #9a3412; font-size: 0.85rem; margin-bottom: 0.25rem;">
+                            📍 ${escapeHtml(area.barangay)}
+                        </div>
+                        <div style="color: #c2410c; font-size: 0.8rem;">
+                            <strong>${totalCrimes}</strong> incidents (3 months) — ${area.risk_level} risk
+                        </div>
+                        ${topCrimes ? `<div style="color: #78350f; font-size: 0.75rem; margin-top: 0.25rem;">Top crimes: ${escapeHtml(topCrimes)}</div>` : ''}
+                        <div style="color: #92400e; font-size: 0.75rem; margin-top: 0.5rem; font-style: italic;">
+                            ⚠ Deploy additional officers to this area. Prioritize ${topCrimes ? escapeHtml(topCrimes.split(',')[0]) : 'focus crime'} response.
+                        </div>
+                    </div>`;
+            });
+        }
+
+        // Also use correlation data for crime-type specific insights
+        if (insights && insights.correlation && insights.correlation.topPairs) {
+            const topPairs = insights.correlation.topPairs.slice(0, 3);
+            topPairs.forEach(pair => {
+                if (pair.count >= 3) {
+                    increasingHtml += `
+                        <div style="background: #fefce8; border: 1px solid #fef08a; border-radius: 8px; padding: 1rem;">
+                            <div style="font-weight: 700; color: #854d0e; font-size: 0.85rem; margin-bottom: 0.25rem;">
+                                🔥 ${escapeHtml(pair.crimeType)} in ${escapeHtml(pair.barangay)}
+                            </div>
+                            <div style="color: #713f12; font-size: 0.8rem;">
+                                <strong>${pair.count}</strong> reported incidents — hotspot pattern detected
+                            </div>
+                            <div style="color: #92400e; font-size: 0.75rem; margin-top: 0.5rem; font-style: italic;">
+                                Deploy ${Math.max(2, Math.ceil(pair.count / 3))} officers for ${escapeHtml(pair.crimeType)} patrol in this barangay.
+                            </div>
+                        </div>`;
+                }
+            });
+        }
+
+        if (!increasingHtml) {
+            increasingHtml = `<div style="color: var(--gray-500); font-size: 0.85rem; padding: 0.75rem;">No significant crime increase patterns detected in the current forecast period.</div>`;
+        }
+        increasingEl.innerHTML = increasingHtml;
+
+        // --- 2. Deployment Suggestions by Station ---
+        const deployBody = document.getElementById('deploymentTableBody');
+        let deployHtml = '';
+
+        if (insights && insights.stations && insights.stations.length > 0) {
+            insights.stations.forEach(station => {
+                const isOk = station.suggestion === 'OK';
+                const rowBg = station.overdue_dispatches > 0 ? '#fef2f2' : (isOk ? '#f0fdf4' : '#fffbeb');
+                const sugColor = station.overdue_dispatches > 0 ? '#dc2626' : (isOk ? '#16a34a' : '#d97706');
+                const sugText = isOk 
+                    ? 'Operations normal. Crime rate well managed.' 
+                    : station.suggestion;
+                
+                deployHtml += `
+                    <tr style="background: ${rowBg};">
+                        <td style="font-weight: 600;">${escapeHtml(station.station_name)}</td>
+                        <td style="text-align: center;">${station.patrol_on_duty} / ${station.patrol_total}</td>
+                        <td style="text-align: center;">${station.active_dispatches}</td>
+                        <td style="text-align: center; color: ${station.overdue_dispatches > 0 ? '#dc2626' : '#16a34a'}; font-weight: 600;">${station.overdue_dispatches}</td>
+                        <td style="color: ${sugColor}; font-size: 0.8rem;">${escapeHtml(sugText)}</td>
+                    </tr>`;
+            });
+        } else {
+            deployHtml = `<tr><td colspan="5" style="text-align: center; color: var(--gray-500); padding: 1rem;">No station data available.</td></tr>`;
+        }
+        deployBody.innerHTML = deployHtml;
+
+        // --- 3. Well-Managed Areas ---
+        const wellManagedEl = document.getElementById('wellManagedAreas');
+        let wellManagedHtml = '';
+
+        // Check forecast: if overall trend is declining, highlight that
+        if (forecast && Array.isArray(forecast) && forecast.length >= 2) {
+            const half = Math.floor(forecast.length / 2);
+            const firstHalf = forecast.slice(0, half);
+            const secondHalf = forecast.slice(half);
+            const avgFirst = firstHalf.reduce((s, d) => s + parseFloat(d.forecast || 0), 0) / firstHalf.length;
+            const avgSecond = secondHalf.reduce((s, d) => s + parseFloat(d.forecast || 0), 0) / secondHalf.length;
+            const changePct = avgFirst > 0 ? ((avgSecond - avgFirst) / avgFirst * 100).toFixed(1) : 0;
+
+            if (changePct <= 0) {
+                wellManagedHtml += `
+                    <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 1rem;">
+                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                            <span style="color: #16a34a; font-weight: 700; font-size: 1.25rem;">↓ ${Math.abs(changePct)}%</span>
+                            <span style="color: #166534; font-size: 0.8rem;">projected decrease</span>
+                        </div>
+                        <p style="color: #14532d; font-size: 0.85rem; margin: 0;">
+                            Overall crime rate is well managed and predicted to decrease. Current policing strategies are effective — maintain current deployment levels.
+                        </p>
+                    </div>`;
+            }
+        }
+
+        // Stations with OK status = well-managed
+        if (insights && insights.stations) {
+            const okStations = insights.stations.filter(s => s.suggestion === 'OK' && s.overdue_dispatches === 0);
+            okStations.slice(0, 4).forEach(station => {
+                wellManagedHtml += `
+                    <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 1rem;">
+                        <div style="font-weight: 700; color: #166534; font-size: 0.85rem; margin-bottom: 0.25rem;">
+                            🏢 ${escapeHtml(station.station_name)}
+                        </div>
+                        <div style="color: #15803d; font-size: 0.8rem;">
+                            ${station.patrol_on_duty} officers on duty, ${station.active_dispatches} active dispatches
+                        </div>
+                        <div style="color: #166534; font-size: 0.75rem; margin-top: 0.25rem;">
+                            ✅ No overdue dispatches. Crime rate well managed in this area.
+                        </div>
+                    </div>`;
+            });
+        }
+
+        // Low-risk barangays
+        if (riskData && Array.isArray(riskData)) {
+            const lowRisk = riskData.filter(b => b.risk_level === 'LOW');
+            if (lowRisk.length > 0) {
+                wellManagedHtml += `
+                    <div style="background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; padding: 1rem;">
+                        <div style="font-weight: 700; color: #065f46; font-size: 0.85rem; margin-bottom: 0.25rem;">
+                            🏘️ ${lowRisk.length} Low-Risk Barangay${lowRisk.length > 1 ? 's' : ''}
+                        </div>
+                        <div style="color: #047857; font-size: 0.8rem;">
+                            ${lowRisk.slice(0, 5).map(b => escapeHtml(b.barangay)).join(', ')}${lowRisk.length > 5 ? ` and ${lowRisk.length - 5} more` : ''}
+                        </div>
+                        <div style="color: #065f46; font-size: 0.75rem; margin-top: 0.25rem;">
+                            ✅ These areas show low crime activity. Current policing strategy is effective.
+                        </div>
+                    </div>`;
+            }
+        }
+
+        // Seasonality-based insight
+        if (insights && insights.seasonality && insights.seasonality.monthAverages) {
+            const currentMonth = new Date().getMonth() + 1;
+            const currentMonthData = insights.seasonality.monthAverages.find(m => m.month === currentMonth);
+            const topMonth = insights.seasonality.topMonths && insights.seasonality.topMonths[0];
+            if (currentMonthData && topMonth && currentMonthData.month !== topMonth.month) {
+                const ratio = topMonth.averageCount > 0 ? (currentMonthData.averageCount / topMonth.averageCount * 100).toFixed(0) : 0;
+                if (ratio < 80) {
+                    wellManagedHtml += `
+                        <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 1rem;">
+                            <div style="font-weight: 700; color: #1e40af; font-size: 0.85rem; margin-bottom: 0.25rem;">
+                                📅 Seasonal Insight
+                            </div>
+                            <div style="color: #1d4ed8; font-size: 0.8rem;">
+                                This month historically sees ${ratio}% of peak-month crime levels (peak: ${escapeHtml(topMonth.monthName)}).
+                            </div>
+                            <div style="color: #1e3a8a; font-size: 0.75rem; margin-top: 0.25rem;">
+                                Current period is comparatively well-managed. Prepare for increased activity towards ${escapeHtml(topMonth.monthName)}.
+                            </div>
+                        </div>`;
+                }
+            }
+        }
+
+        if (!wellManagedHtml) {
+            wellManagedHtml = `<div style="color: var(--gray-500); font-size: 0.85rem; padding: 0.75rem;">Insufficient data to identify well-managed areas at this time.</div>`;
+        }
+        wellManagedEl.innerHTML = wellManagedHtml;
+
+        // Show content
+        loadingEl.style.display = 'none';
+        contentEl.style.display = 'block';
+
+    } catch (error) {
+        console.error('Error loading forecast insights:', error);
+        loadingEl.style.display = 'none';
+        errorEl.style.display = 'block';
+    }
 }
 
 // Load SARIMA Forecast

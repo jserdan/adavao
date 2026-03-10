@@ -437,7 +437,7 @@ export default function DispatchDetails() {
         }
 
         // If someone else accepted, show info banner
-        if (status !== 'pending' && !isMyDispatch) {
+        if (status !== 'pending' && status !== 'assigned' && !isMyDispatch) {
             return (
                 <View style={[styles.completedBanner, { backgroundColor: '#EFF6FF' }]}>
                     <Ionicons name="information-circle" size={24} color={COLORS.primary} />
@@ -450,7 +450,7 @@ export default function DispatchDetails() {
 
         return (
             <View style={styles.actionsContainer}>
-                {status === 'pending' && (
+                {(status === 'pending' || status === 'assigned') && (
                     <TouchableOpacity style={[styles.actionButton, { backgroundColor: COLORS.primary }]} onPress={acceptDispatch} disabled={actionLoading}>
                         {actionLoading ? <ActivityIndicator color={COLORS.white} /> : (
                             <><Ionicons name="checkmark-circle" size={20} color={COLORS.white} /><Text style={styles.actionButtonText}>Accept Dispatch</Text></>

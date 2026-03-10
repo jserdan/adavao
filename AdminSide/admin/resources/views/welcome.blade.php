@@ -764,49 +764,6 @@
         if(isset($dateTo) && $dateTo) $queryParams['date_to'] = $dateTo;
     @endphp
 
-    <!-- SECTION: POLICE CENTRAL ADMIN DASHBOARD (Action-Oriented) -->
-    <div class="stats-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 2rem;">
-        
-        <!-- 1. CRITICAL ATTENTION (Highest Priority) -->
-        <a href="{{ route('reports', array_merge(['status' => 'pending'], $queryParams)) }}" class="stat-card" style="border-left-color: #ef4444; background: #fef2f2;">
-            <div style="display: flex; justify-content: space-between; align-items: start;">
-                <div class="stat-title" style="color: #ef4444; font-weight: 700;">CRITICAL ATTENTION</div>
-                <span style="background: #ef4444; color: white; font-size: 0.6rem; padding: 2px 6px; border-radius: 99px; font-weight: 700;">URGENT</span>
-            </div>
-            <div class="stat-value" style="color: #b91c1c;">{{ $urgentPending ?? 0 }}</div>
-            <div style="font-size: 0.75rem; color: #7f1d1d; margin-top: 4px; font-weight: 500;">
-                High Priority Pending Cases
-            </div>
-        </a>
-
-        <!-- 2. NEW REPORTS TODAY (Operational Tempo) -->
-        <a href="{{ route('reports', $queryParams) }}" class="stat-card" style="border-left-color: #3b82f6;">
-            <div class="stat-title" style="color: #1d4ed8;">NEW TODAY</div>
-            <div class="stat-value" style="color: #1e3a8a;">{{ $reportsToday }}</div>
-            <div style="font-size: 0.75rem; color: #6b7280; margin-top: 4px;">
-                Incoming Reports (24h)
-            </div>
-        </a>
-
-        <!-- 3. ACTIVE INVESTIGATIONS (Current Load) -->
-        <a href="{{ route('reports', array_merge(['status' => 'investigating'], $queryParams)) }}" class="stat-card" style="border-left-color: #f59e0b;">
-            <div class="stat-title" style="color: #b45309;">ACTIVE CASES</div>
-            <div class="stat-value" style="color: #78350f;">{{ $activeInvestigations }}</div>
-            <div style="font-size: 0.75rem; color: #6b7280; margin-top: 4px;">
-                Under Investigation
-            </div>
-        </a>
-
-        <!-- 4. SOLVED THIS MONTH (Performance/Success) -->
-        <a href="{{ route('reports', array_merge(['status' => 'resolved'], $queryParams)) }}" class="stat-card" style="border-left-color: #10b981;">
-            <div class="stat-title" style="color: #047857;">SOLVED (MONTH)</div>
-            <div class="stat-value" style="color: #064e3b;">{{ $solvedThisMonth }}</div>
-            <div style="font-size: 0.75rem; color: #6b7280; margin-top: 4px;">
-                Cases Closed in {{ \Carbon\Carbon::now()->format('F') }}
-            </div>
-        </a>
-    </div>
-
     <!-- Complaint Summary Cards -->
     <h2 class="section-title">Complaint Summary</h2>
     <div class="stats-grid" style="grid-template-columns: repeat(3, 1fr); margin-bottom: 2rem;">
@@ -835,48 +792,7 @@
     </div>
 
     @if($userRole !== 'police')
-        <!-- ADMIN DASHBOARD: System Overview -->
-        <h2 class="section-title">System Overview</h2>
-        <div class="stats-grid" style="grid-template-columns: repeat(4, 1fr);">
-            
-            <!-- Messages -->
-            <a href="{{ route('messages') }}" class="stat-card" style="border-left-color: #f59e0b;">
-                <div class="stat-title">Messages</div>
-                <div class="stat-value">{{ $unreadMessages }}</div>
-            </a>
-            
-            <!-- Users -->
-            <a href="{{ route('users') }}" class="stat-card" style="border-left-color: #8b5cf6;">
-                <div class="stat-title">Users</div>
-                <div class="stat-value">{{ $totalUsers }}</div>
-            </a>
-            
-            <!-- Flagged Users -->
-            <a href="{{ route('flagged-users') }}" class="stat-card" style="border-left-color: #ef4444;">
-                <div class="stat-title">Flagged Users</div>
-                <div class="stat-value">{{ $flaggedUsersCount }}</div>
-            </a>
-            
-            <!-- Verification -->
-            <a href="{{ route('verification') }}" class="stat-card" style="border-left-color: #ec4899;">
-                <div class="stat-title">Verification</div>
-                <div class="stat-value">{{ $pendingVerificationsCount }}</div>
-            </a>
-            
-            <!-- Statistics -->
-            <a href="{{ route('statistics') }}" class="stat-card" style="border-left-color: #14b8a6;">
-                <div class="stat-title">Statistics</div>
-                <div class="stat-value" style="font-size: 1.25rem;">View Analytics</div>
-            </a>
-            
-            <!-- View Map -->
-            <a href="{{ route('view-map') }}" class="stat-card" style="border-left-color: #ec4899;">
-                <div class="stat-title">Crime Map</div>
-                <div class="stat-value" style="font-size: 1.25rem;">Open Live Map</div>
-            </a>
-        </div>
-        
-        <!-- ITEM 19: CRIME FORECAST INSIGHTS -->
+        <!-- CRIME FORECAST INSIGHTS -->
         <div class="dashboard-grid" style="margin-top: 2rem;">
             <div class="priority-section" style="border-color: #8b5cf6;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">

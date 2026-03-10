@@ -148,9 +148,9 @@ export default function PatrolDispatchesScreen() {
         if (!userId) return;
         if (!notifiedLoadedRef.current) return;
 
-        // Notify about any new pending dispatches (broadcast model)
+        // Notify about any new pending or directly-assigned dispatches
         const pendingDispatches = list.filter((dispatch) =>
-            dispatch?.status === 'pending'
+            dispatch?.status === 'pending' || dispatch?.status === 'assigned'
         );
 
         let hasNew = false;
@@ -205,9 +205,9 @@ export default function PatrolDispatchesScreen() {
                 const allDispatches = data.data || [];
                 await notifyNewAssignedDispatches(allDispatches);
 
-                // Split into pending (no officer accepted) vs active (someone accepted)
-                const pending = allDispatches.filter((d: Dispatch) => d.status === 'pending');
-                const active = allDispatches.filter((d: Dispatch) => d.status !== 'pending');
+                // Split into pending/assigned (needs acceptance) vs active (already accepted)
+                const pending = allDispatches.filter((d: Dispatch) => d.status === 'pending' || d.status === 'assigned');
+                const active = allDispatches.filter((d: Dispatch) => d.status !== 'pending' && d.status !== 'assigned');
 
                 setDispatches(prev => {
                     const newIds = pending.map((d: any) => `${d.dispatch_id}-${d.status}-${d.officer_name}`);
@@ -345,6 +345,13 @@ export default function PatrolDispatchesScreen() {
                     </Text>
                 </View>
 
+                {dispatch.status === 'assigned' && String(dispatch.patrol_officer_id) === userId && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#EFF6FF', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6, marginTop: 4, alignSelf: 'flex-start' }}>
+                        <Ionicons name="person" size={14} color={COLORS.primary} />
+                        <Text style={{ fontSize: fontSize.xs, fontWeight: '700', color: COLORS.primary }}>ASSIGNED TO YOU</Text>
+                    </View>
+                )}
+
                 {dispatch.title && (
                     <View style={styles.dispatchDetailRow}>
                         <Ionicons name="document-text-outline" size={16} color={COLORS.textSecondary} />
@@ -437,7 +444,9 @@ export default function PatrolDispatchesScreen() {
                             ? `${officerName} has arrived at the location`
                             : dispatch.status === 'en_route'
                                 ? `${officerName} is en route`
-                                : `${officerName} has accepted this dispatch`
+                                : dispatch.status === 'assigned'
+                                    ? `Assigned to ${officerName} — awaiting acceptance`
+                                    : `${officerName} has accepted this dispatch`
                         }
                     </Text>
                 </View>

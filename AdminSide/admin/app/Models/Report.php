@@ -26,6 +26,7 @@ class Report extends Model
         'date_reported',
         'is_focus_crime',
         'has_sufficient_info',
+        'urgency_score',
     ];
 
     protected $casts = [

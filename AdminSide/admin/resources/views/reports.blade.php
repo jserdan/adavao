@@ -1519,6 +1519,27 @@
                 </select>
             </div>
 
+            <div style="display: flex; flex-direction: column;">
+                <label style="font-size: 0.65rem; color: #6b7280; font-weight: 700; text-transform: uppercase;">Threat Level</label>
+                <select name="urgency" style="border: 1px solid #d1d5db; border-radius: 4px; padding: 2px 4px; font-size: 0.8rem; color: #374151; height: 26px;">
+                    <option value="" {{ !request('urgency') ? 'selected' : '' }}>All Levels</option>
+                    <option value="critical" {{ request('urgency') === 'critical' ? 'selected' : '' }}>🔴 Critical</option>
+                    <option value="high" {{ request('urgency') === 'high' ? 'selected' : '' }}>🟠 High</option>
+                    <option value="medium" {{ request('urgency') === 'medium' ? 'selected' : '' }}>🟡 Medium</option>
+                    <option value="low" {{ request('urgency') === 'low' ? 'selected' : '' }}>⚪ Low</option>
+                </select>
+            </div>
+
+            <div style="display: flex; flex-direction: column;">
+                <label style="font-size: 0.65rem; color: #6b7280; font-weight: 700; text-transform: uppercase;">Validity</label>
+                <select name="validity" style="border: 1px solid #d1d5db; border-radius: 4px; padding: 2px 4px; font-size: 0.8rem; color: #374151; height: 26px;">
+                    <option value="" {{ !request('validity') ? 'selected' : '' }}>All</option>
+                    <option value="valid" {{ request('validity') === 'valid' ? 'selected' : '' }}>Valid</option>
+                    <option value="invalid" {{ request('validity') === 'invalid' ? 'selected' : '' }}>Invalid (Fake)</option>
+                    <option value="checking_for_report_validity" {{ request('validity') === 'checking_for_report_validity' ? 'selected' : '' }}>Checking</option>
+                </select>
+            </div>
+
             <div style="display: flex; flex-direction: column; justify-content: flex-end;">
                 <label style="font-size: 0.65rem; color: #6b7280; font-weight: 700; text-transform: uppercase;">Flags</label>
                 <div style="display:flex; gap: 0.5rem; align-items:center; height: 26px;">
@@ -1534,10 +1555,14 @@
             </div>
 
             <button type="submit" style="background: #3b82f6; color: white; border: none; padding: 0 1rem; border-radius: 6px; font-weight: 600; font-size: 0.8rem; cursor: pointer; margin-left: 0.5rem; height: 38px; transition: background 0.2s;">Filter</button>
-            @if(request('date_from') || request('date_to') || request('status') || request('sort') || request('overdue') || request('focus'))
+            @if(request('date_from') || request('date_to') || request('status') || request('sort') || request('overdue') || request('focus') || request('urgency') || request('validity'))
                 <a href="{{ route('reports') }}" style="color: #6b7280; text-decoration: none; font-size: 0.8rem; margin-left: 0.5rem; padding: 0.5rem; border-radius: 4px; background: #f3f4f6;">Reset</a>
             @endif
         </form>
+
+        <button onclick="exportFilteredReportsPDF()" style="background: #059669; color: white; border: none; padding: 0 1rem; border-radius: 6px; font-weight: 600; font-size: 0.8rem; cursor: pointer; height: 38px; transition: background 0.2s; display: flex; align-items: center; gap: 0.35rem; white-space: nowrap;" title="Export currently filtered reports as PDF">
+            📄 Export PDF
+        </button>
 
         <div class="search-box">
             <svg class="search-icon" viewBox="0 0 24 24">
@@ -1704,9 +1729,15 @@
                                         $isValid = $report->is_valid;
                                         
                                         if ($isValid === 'checking_for_report_validity' || !$validatedAt) {
-                                            // Still pending validation
-                                            $ruleStatus = 'Pending';
-                                            $ruleClass = 'pending';
+                                            // Still pending validation - check if already past 3 min
+                                            $elapsedSinceCreation = $createdAt->diffInSeconds(\Carbon\Carbon::now());
+                                            if ($elapsedSinceCreation > 180) {
+                                                $ruleStatus = 'Exceeded';
+                                                $ruleClass = 'exceeded';
+                                            } else {
+                                                $ruleStatus = 'Pending';
+                                                $ruleClass = 'pending';
+                                            }
                                         } else {
                                             // Validated - check if within 3 minutes
                                             $validationTime = $createdAt->diffInSeconds($validatedAt);
@@ -1719,7 +1750,10 @@
                                             }
                                         }
                                     @endphp
-                                    <span class="rule-status {{ $ruleClass }}">
+                                    <span class="rule-status {{ $ruleClass }}"
+                                          data-rule-created-at="{{ $createdAt->timestamp }}"
+                                          data-rule-validated-at="{{ $validatedAt ? \Carbon\Carbon::parse($validatedAt)->timestamp : '' }}"
+                                          data-rule-is-valid="{{ $isValid }}">
                                         {{ $ruleStatus }}
                                     </span>
                                 </td>
@@ -2093,6 +2127,246 @@ function updateSLATimers() {
 
 updateSLATimers();
 setInterval(updateSLATimers, 1000);
+
+// Auto-update Rule Status column in real-time
+function updateRuleStatuses() {
+    const ruleElements = document.querySelectorAll('.rule-status');
+    const now = Math.floor(Date.now() / 1000);
+    
+    ruleElements.forEach(el => {
+        const createdAt = parseInt(el.getAttribute('data-rule-created-at'));
+        const validatedAt = el.getAttribute('data-rule-validated-at');
+        const isValid = el.getAttribute('data-rule-is-valid');
+        
+        if (!createdAt) return;
+        
+        // If already validated, status is frozen
+        if (validatedAt) return;
+        
+        // If still checking, auto-update to exceeded when past 3 min
+        if (isValid === 'checking_for_report_validity' || !isValid) {
+            const elapsed = now - createdAt;
+            if (elapsed > 180) {
+                el.textContent = 'Exceeded';
+                el.className = 'rule-status exceeded';
+            } else {
+                el.textContent = 'Pending';
+                el.className = 'rule-status pending';
+            }
+        }
+    });
+}
+
+updateRuleStatuses();
+setInterval(updateRuleStatuses, 1000);
+
+// Report data for PDF export
+var reportsDataForExport = @json($reports->map(function($report) {
+    $reportType = $report->report_type ?? 'N/A';
+    if (is_string($reportType)) {
+        $decoded = json_decode($reportType, true);
+        if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+            $reportType = implode(', ', $decoded);
+        }
+    } elseif (is_array($reportType)) {
+        $reportType = implode(', ', $reportType);
+    }
+
+    $urgencyScore = $report->urgency_score ?? 0;
+    if ($urgencyScore >= 90) { $urgencyLabel = 'CRITICAL'; }
+    elseif ($urgencyScore >= 70) { $urgencyLabel = 'HIGH'; }
+    elseif ($urgencyScore >= 50) { $urgencyLabel = 'MEDIUM'; }
+    else { $urgencyLabel = 'LOW'; }
+
+    $userName = 'Unknown';
+    if ($report->is_anonymous) { $userName = 'Anonymous'; }
+    elseif ($report->user) { $userName = $report->user->firstname . ' ' . $report->user->lastname; }
+
+    $barangay = optional($report->location)->barangay ?? 'N/A';
+
+    return [
+        'id' => str_pad($report->report_id, 5, '0', STR_PAD_LEFT),
+        'user' => $userName,
+        'type' => $reportType,
+        'urgency' => $urgencyLabel,
+        'urgency_score' => $urgencyScore,
+        'status' => ucfirst($report->status),
+        'validity' => $report->is_valid === 'valid' ? 'Valid' : ($report->is_valid === 'invalid' ? 'Invalid' : 'Checking'),
+        'date' => optional($report->created_at)->format('M d, Y h:i A') ?? 'N/A',
+        'barangay' => $barangay,
+        'description' => \Illuminate\Support\Str::limit($report->description ?? '', 120),
+        'title' => $report->title ?? '',
+    ];
+})->values());
+
+function exportFilteredReportsPDF() {
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF('landscape', 'mm', 'a4');
+
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const margin = 14;
+    let y = margin;
+
+    // --- Header ---
+    pdf.setFillColor(29, 53, 87); // --primary
+    pdf.rect(0, 0, pageWidth, 28, 'F');
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFontSize(16);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('AlertDavao — Filtered Reports Summary', margin, 12);
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'normal');
+
+    // Show active filters
+    const filters = [];
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('status') && urlParams.get('status') !== 'all') filters.push('Status: ' + urlParams.get('status'));
+    if (urlParams.get('urgency')) filters.push('Threat: ' + urlParams.get('urgency'));
+    if (urlParams.get('validity')) filters.push('Validity: ' + urlParams.get('validity'));
+    if (urlParams.get('date_from')) filters.push('From: ' + urlParams.get('date_from'));
+    if (urlParams.get('date_to')) filters.push('To: ' + urlParams.get('date_to'));
+    const filterText = filters.length > 0 ? 'Filters: ' + filters.join(' | ') : 'Showing: All Reports';
+    pdf.text(filterText + '   |   Generated: ' + new Date().toLocaleString(), margin, 22);
+
+    y = 34;
+
+    // --- Table Header ---
+    const colWidths = [18, 35, 45, 24, 24, 22, 35, 65];
+    const colHeaders = ['ID', 'User', 'Crime Type', 'Urgency', 'Status', 'Validity', 'Date', 'Description'];
+    const tableWidth = colWidths.reduce((a, b) => a + b, 0);
+
+    function drawTableHeader() {
+        pdf.setFillColor(241, 245, 249);
+        pdf.rect(margin, y, tableWidth, 8, 'F');
+        pdf.setDrawColor(209, 213, 219);
+        pdf.line(margin, y + 8, margin + tableWidth, y + 8);
+        pdf.setTextColor(55, 65, 81);
+        pdf.setFontSize(7.5);
+        pdf.setFont('helvetica', 'bold');
+        let x = margin;
+        colHeaders.forEach((h, i) => {
+            pdf.text(h, x + 1.5, y + 5.5);
+            x += colWidths[i];
+        });
+        y += 10;
+        pdf.setFont('helvetica', 'normal');
+    }
+
+    drawTableHeader();
+
+    // --- Table Rows ---
+    pdf.setFontSize(7);
+    const data = reportsDataForExport;
+
+    if (data.length === 0) {
+        pdf.setTextColor(107, 114, 128);
+        pdf.text('No reports found with the current filters.', margin, y + 5);
+    } else {
+        data.forEach((report, idx) => {
+            if (y + 8 > pageHeight - 20) {
+                // Footer on current page
+                drawFooter(pdf, pageWidth, pageHeight, margin);
+                pdf.addPage();
+                y = margin;
+                drawTableHeader();
+            }
+
+            // Alternate row background
+            if (idx % 2 === 0) {
+                pdf.setFillColor(249, 250, 251);
+                pdf.rect(margin, y, tableWidth, 7, 'F');
+            }
+
+            // Urgency color coding
+            let urgencyColor = [107, 114, 128]; // gray
+            if (report.urgency === 'CRITICAL') urgencyColor = [220, 38, 38];
+            else if (report.urgency === 'HIGH') urgencyColor = [234, 88, 12];
+            else if (report.urgency === 'MEDIUM') urgencyColor = [202, 138, 4];
+
+            let x = margin;
+            pdf.setTextColor(55, 65, 81);
+
+            // ID
+            pdf.text(String(report.id), x + 1.5, y + 5);
+            x += colWidths[0];
+
+            // User
+            pdf.text(String(report.user || '').substring(0, 18), x + 1.5, y + 5);
+            x += colWidths[1];
+
+            // Type
+            pdf.text(String(report.type || '').substring(0, 28), x + 1.5, y + 5);
+            x += colWidths[2];
+
+            // Urgency (colored)
+            pdf.setTextColor(...urgencyColor);
+            pdf.setFont('helvetica', 'bold');
+            pdf.text(report.urgency, x + 1.5, y + 5);
+            pdf.setFont('helvetica', 'normal');
+            pdf.setTextColor(55, 65, 81);
+            x += colWidths[3];
+
+            // Status
+            pdf.text(String(report.status || ''), x + 1.5, y + 5);
+            x += colWidths[4];
+
+            // Validity
+            const validColor = report.validity === 'Valid' ? [22, 163, 74] : (report.validity === 'Invalid' ? [220, 38, 38] : [107, 114, 128]);
+            pdf.setTextColor(...validColor);
+            pdf.text(report.validity, x + 1.5, y + 5);
+            pdf.setTextColor(55, 65, 81);
+            x += colWidths[5];
+
+            // Date
+            pdf.text(String(report.date || '').substring(0, 18), x + 1.5, y + 5);
+            x += colWidths[6];
+
+            // Description (truncated)
+            const desc = String(report.description || report.title || 'No description').substring(0, 50);
+            pdf.text(desc, x + 1.5, y + 5);
+
+            y += 7;
+        });
+    }
+
+    // Final footer
+    drawFooter(pdf, pageWidth, pageHeight, margin);
+
+    // --- Summary Box ---
+    if (y + 30 < pageHeight - 20) {
+        y += 5;
+        pdf.setFillColor(238, 242, 255);
+        pdf.roundedRect(margin, y, tableWidth, 20, 2, 2, 'F');
+        pdf.setFontSize(8);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(67, 56, 202);
+        pdf.text('Summary', margin + 4, y + 6);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(55, 65, 81);
+
+        const totalCount = data.length;
+        const criticalCount = data.filter(r => r.urgency === 'CRITICAL').length;
+        const highCount = data.filter(r => r.urgency === 'HIGH').length;
+        const invalidCount = data.filter(r => r.validity === 'Invalid').length;
+        const resolvedCount = data.filter(r => r.status === 'Resolved').length;
+
+        pdf.text(`Total Reports: ${totalCount}   |   Critical: ${criticalCount}   |   High: ${highCount}   |   Resolved: ${resolvedCount}   |   Invalid/Fake: ${invalidCount}`, margin + 4, y + 14);
+    }
+
+    // Save
+    const timestamp = new Date().toISOString().slice(0, 10);
+    pdf.save(`AlertDavao_Reports_${timestamp}.pdf`);
+}
+
+function drawFooter(pdf, pageWidth, pageHeight, margin) {
+    pdf.setDrawColor(209, 213, 219);
+    pdf.line(margin, pageHeight - 12, pageWidth - margin, pageHeight - 12);
+    pdf.setFontSize(7);
+    pdf.setTextColor(156, 163, 175);
+    pdf.text('AlertDavao Crime Reporting System — Confidential', margin, pageHeight - 7);
+    pdf.text('Page ' + pdf.internal.getCurrentPageInfo().pageNumber, pageWidth - margin - 20, pageHeight - 7);
+}
 
 </script>
 
@@ -2730,36 +3004,86 @@ setInterval(updateSLATimers, 1000);
              const target = selectElement || (typeof event !== 'undefined' ? event.target : null);
              if (!target) return;
 
+             const originalValidity = target.getAttribute('data-original-validity');
+
+             // Validation confirmation prompt with 3-minute rule context
+             const row = target.closest('tr');
+             const slaTimer = row ? row.querySelector('.sla-timer') : null;
+             const createdAtTs = slaTimer ? parseInt(slaTimer.getAttribute('data-created-at')) : 0;
+             const nowTs = Math.floor(Date.now() / 1000);
+             const elapsedSeconds = nowTs - createdAtTs;
+             const threeMinRule = elapsedSeconds <= 180;
+             const elapsedMin = Math.floor(elapsedSeconds / 60);
+             const elapsedSec = elapsedSeconds % 60;
+             
+             let confirmMsg = '';
+             if (isValid === 'valid') {
+                 confirmMsg = `Are you sure you want to mark this report as VALID?\n\n`;
+                 confirmMsg += `⏱️ 3-Minute Rule: ${threeMinRule ? '✅ WITHIN TIME (' + elapsedMin + 'm ' + elapsedSec + 's)' : '❌ EXCEEDED (' + elapsedMin + 'm ' + elapsedSec + 's)'}`;
+                 confirmMsg += `\n\nThis will record the validation timestamp for the 3-minute rule compliance.`;
+             } else if (isValid === 'invalid') {
+                 confirmMsg = `Are you sure you want to mark this report as INVALID (Fake Report)?\n\n`;
+                 confirmMsg += `⏱️ 3-Minute Rule: ${threeMinRule ? '✅ WITHIN TIME (' + elapsedMin + 'm ' + elapsedSec + 's)' : '❌ EXCEEDED (' + elapsedMin + 'm ' + elapsedSec + 's)'}`;
+                 confirmMsg += `\n\nA rejection reason may be required.`;
+             } else {
+                 confirmMsg = 'Reset report validity to "Checking"?';
+             }
+
+             if (!confirm(confirmMsg)) {
+                 target.value = originalValidity;
+                 return;
+             }
+
+             // If marking as invalid, prompt for reason
+             let rejectionReason = null;
+             if (isValid === 'invalid') {
+                 rejectionReason = prompt('Please provide a reason for marking this report as invalid:');
+                 if (rejectionReason === null) {
+                     target.value = originalValidity;
+                     return;
+                 }
+             }
+
+             const bodyData = { is_valid: isValid };
+             if (rejectionReason) bodyData.rejection_reason = rejectionReason;
+
              fetch(`/reports/${reportId}/validity`, {
                  method: 'PUT',
                  headers: {
                      'Content-Type': 'application/json',
                      'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
                  },
-                 body: JSON.stringify({
-                     is_valid: isValid
-                 })
+                 body: JSON.stringify(bodyData)
              })
                  .then(response => response.json())
                  .then(data => {
                      if (data.success) {
-                         // Update successful - no need to update UI since we're using a select dropdown
-                         // The select already shows the current validity status
-                         // Update the original validity attribute
                          target.setAttribute('data-original-validity', isValid);
-
-                         alert('Report validity status updated successfully');
+                         const ruleMsg = threeMinRule ? '✅ 3-Minute Rule: ACHIEVED' : '⚠️ 3-Minute Rule: EXCEEDED';
+                         alert(`Report validity updated successfully.\n${ruleMsg}`);
+                         
+                         // Update the Rule Status column in the same row
+                         const ruleStatusEl = row ? row.querySelector('.rule-status') : null;
+                         if (ruleStatusEl && (isValid === 'valid' || isValid === 'invalid')) {
+                             if (threeMinRule) {
+                                 ruleStatusEl.textContent = 'Within 3 Min';
+                                 ruleStatusEl.className = 'rule-status within-sla';
+                             } else {
+                                 ruleStatusEl.textContent = 'Exceeded';
+                                 ruleStatusEl.className = 'rule-status exceeded';
+                             }
+                             // Mark as validated so the auto-update stops
+                             ruleStatusEl.setAttribute('data-rule-validated-at', nowTs.toString());
+                         }
                      } else {
                          alert('Failed to update validity status: ' + (data.message || 'Unknown error'));
-                         // Revert to original validity status
-                         target.value = target.getAttribute('data-original-validity');
+                         target.value = originalValidity;
                      }
                  })
                  .catch(error => {
                      console.error('Error:', error);
                      alert('An error occurred while updating validity status: ' + (error.message || 'Unknown error'));
-                     // Revert to original validity status
-                     target.value = target.getAttribute('data-original-validity');
+                     target.value = originalValidity;
                  });
          }
 

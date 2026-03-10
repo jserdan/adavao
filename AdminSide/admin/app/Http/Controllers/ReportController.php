@@ -187,6 +187,27 @@ class ReportController extends Controller
             $query->where('reports.is_focus_crime', true);
         }
 
+        // Urgency/Threat level filter
+        if ($request->has('urgency') && $request->urgency) {
+            $urgencyLevel = strtolower($request->urgency);
+            if ($urgencyLevel === 'critical') {
+                $query->where('reports.urgency_score', '>=', 90);
+            } elseif ($urgencyLevel === 'high') {
+                $query->where('reports.urgency_score', '>=', 70)
+                      ->where('reports.urgency_score', '<', 90);
+            } elseif ($urgencyLevel === 'medium') {
+                $query->where('reports.urgency_score', '>=', 50)
+                      ->where('reports.urgency_score', '<', 70);
+            } elseif ($urgencyLevel === 'low') {
+                $query->where('reports.urgency_score', '<', 50);
+            }
+        }
+
+        // Validity filter (for clickable cards: invalid = fake reports)
+        if ($request->has('validity') && $request->validity) {
+            $query->where('reports.is_valid', $request->validity);
+        }
+
         // ROLE CHECK: Police role takes precedence over admin
         $user = auth()->user();
         $isAdmin = false;
@@ -491,15 +512,52 @@ class ReportController extends Controller
             }
         }
 
-        // Check if any crime type matches Focus Crimes
+        // Crime urgency categories (case-insensitive matching)
+        $CRITICAL_CRIMES = ['Murder', 'Homicide', 'Rape', 'Sexual Assault'];
+        $HIGH_PRIORITY = ['Robbery', 'Physical Injury', 'Domestic Violence', 'Missing Person', 'Harassment'];
+        $MEDIUM_PRIORITY = ['Theft', 'Burglary', 'Break-in', 'Carnapping', 'Motornapping', 'Motorcycle Theft', 'Threats', 'Fraud', 'Cybercrime'];
+
+        // Check if any crime type matches Focus Crimes and determine urgency
         $isFocusCrime = false;
+        $hasCritical = false;
+        $hasHigh = false;
+        $hasMedium = false;
+
         foreach ($types as $type) {
+            // Check focus crimes
             foreach ($focusCrimes as $focusCrime) {
                 if (stripos($type, $focusCrime) !== false) {
                     $isFocusCrime = true;
-                    break 2;
+                    break;
                 }
             }
+
+            // Check urgency tiers (case-insensitive partial match)
+            $matched = false;
+            foreach ($CRITICAL_CRIMES as $c) {
+                if (stripos($type, $c) !== false) { $hasCritical = true; $matched = true; break; }
+            }
+            if (!$matched) {
+                foreach ($HIGH_PRIORITY as $c) {
+                    if (stripos($type, $c) !== false) { $hasHigh = true; $matched = true; break; }
+                }
+            }
+            if (!$matched) {
+                foreach ($MEDIUM_PRIORITY as $c) {
+                    if (stripos($type, $c) !== false) { $hasMedium = true; $matched = true; break; }
+                }
+            }
+        }
+
+        // Calculate urgency score
+        $urgencyScore = 30; // Base LOW
+        if ($hasCritical) $urgencyScore = 100;
+        elseif ($hasHigh) $urgencyScore = 75;
+        elseif ($hasMedium) $urgencyScore = 50;
+
+        // Bonus: +10 if report has evidence files
+        if ($report->media && $report->media->count() > 0) {
+            $urgencyScore = min(100, $urgencyScore + 10);
         }
 
         // Check information sufficiency
@@ -507,9 +565,10 @@ class ReportController extends Controller
                             strlen($report->description) >= 20 &&
                             !empty($report->location_id);
 
-        // Set flags
+        // Set flags and urgency score
         $report->is_focus_crime = $isFocusCrime;
         $report->has_sufficient_info = $hasSufficientInfo;
+        $report->urgency_score = $urgencyScore;
         $report->save();
 
         \Log::info('Priority flags set', [

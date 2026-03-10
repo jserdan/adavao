@@ -63,17 +63,20 @@ class RecalculateUrgencyScores extends Command
             $hasMedium = false;
 
             foreach ($crimeTypes as $crime) {
-                // Case-insensitive exact match check if possible, or strict includes
-                // Logic used in handleReport.js:
-                if (in_array($crime, $CRITICAL_CRIMES)) $hasCritical = true;
-                elseif (in_array($crime, $HIGH_PRIORITY)) $hasHigh = true;
-                elseif (in_array($crime, $MEDIUM_PRIORITY)) $hasMedium = true;
-                
-                // Also check partials for legacy data compatibility
-                 else {
-                    foreach($CRITICAL_CRIMES as $c) if(stripos($crime, $c) !== false) $hasCritical = true;
-                    if(!$hasCritical) foreach($HIGH_PRIORITY as $c) if(stripos($crime, $c) !== false) $hasHigh = true;
-                    if(!$hasCritical && !$hasHigh) foreach($MEDIUM_PRIORITY as $c) if(stripos($crime, $c) !== false) $hasMedium = true;
+                // Always use case-insensitive partial matching for robust detection
+                $matched = false;
+                foreach ($CRITICAL_CRIMES as $c) {
+                    if (stripos($crime, $c) !== false) { $hasCritical = true; $matched = true; break; }
+                }
+                if (!$matched) {
+                    foreach ($HIGH_PRIORITY as $c) {
+                        if (stripos($crime, $c) !== false) { $hasHigh = true; $matched = true; break; }
+                    }
+                }
+                if (!$matched) {
+                    foreach ($MEDIUM_PRIORITY as $c) {
+                        if (stripos($crime, $c) !== false) { $hasMedium = true; break; }
+                    }
                 }
             }
 
