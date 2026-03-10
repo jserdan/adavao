@@ -2161,43 +2161,48 @@ updateRuleStatuses();
 setInterval(updateRuleStatuses, 1000);
 
 // Report data for PDF export
-var reportsDataForExport = @json($reports->map(function($report) {
-    $reportType = $report->report_type ?? 'N/A';
-    if (is_string($reportType)) {
-        $decoded = json_decode($reportType, true);
-        if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
-            $reportType = implode(', ', $decoded);
+</script>
+@php
+    $reportsExportData = $reports->map(function($report) {
+        $reportType = $report->report_type ?? 'N/A';
+        if (is_string($reportType)) {
+            $decoded = json_decode($reportType, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                $reportType = implode(', ', $decoded);
+            }
+        } elseif (is_array($reportType)) {
+            $reportType = implode(', ', $reportType);
         }
-    } elseif (is_array($reportType)) {
-        $reportType = implode(', ', $reportType);
-    }
 
-    $urgencyScore = $report->urgency_score ?? 0;
-    if ($urgencyScore >= 90) { $urgencyLabel = 'CRITICAL'; }
-    elseif ($urgencyScore >= 70) { $urgencyLabel = 'HIGH'; }
-    elseif ($urgencyScore >= 50) { $urgencyLabel = 'MEDIUM'; }
-    else { $urgencyLabel = 'LOW'; }
+        $urgencyScore = $report->urgency_score ?? 0;
+        if ($urgencyScore >= 90) { $urgencyLabel = 'CRITICAL'; }
+        elseif ($urgencyScore >= 70) { $urgencyLabel = 'HIGH'; }
+        elseif ($urgencyScore >= 50) { $urgencyLabel = 'MEDIUM'; }
+        else { $urgencyLabel = 'LOW'; }
 
-    $userName = 'Unknown';
-    if ($report->is_anonymous) { $userName = 'Anonymous'; }
-    elseif ($report->user) { $userName = $report->user->firstname . ' ' . $report->user->lastname; }
+        $userName = 'Unknown';
+        if ($report->is_anonymous) { $userName = 'Anonymous'; }
+        elseif ($report->user) { $userName = $report->user->firstname . ' ' . $report->user->lastname; }
 
-    $barangay = optional($report->location)->barangay ?? 'N/A';
+        $barangay = optional($report->location)->barangay ?? 'N/A';
 
-    return [
-        'id' => str_pad($report->report_id, 5, '0', STR_PAD_LEFT),
-        'user' => $userName,
-        'type' => $reportType,
-        'urgency' => $urgencyLabel,
-        'urgency_score' => $urgencyScore,
-        'status' => ucfirst($report->status),
-        'validity' => $report->is_valid === 'valid' ? 'Valid' : ($report->is_valid === 'invalid' ? 'Invalid' : 'Checking'),
-        'date' => optional($report->created_at)->format('M d, Y h:i A') ?? 'N/A',
-        'barangay' => $barangay,
-        'description' => \Illuminate\Support\Str::limit($report->description ?? '', 120),
-        'title' => $report->title ?? '',
-    ];
-})->values());
+        return [
+            'id' => str_pad($report->report_id, 5, '0', STR_PAD_LEFT),
+            'user' => $userName,
+            'type' => $reportType,
+            'urgency' => $urgencyLabel,
+            'urgency_score' => $urgencyScore,
+            'status' => ucfirst($report->status),
+            'validity' => $report->is_valid === 'valid' ? 'Valid' : ($report->is_valid === 'invalid' ? 'Invalid' : 'Checking'),
+            'date' => optional($report->created_at)->format('M d, Y h:i A') ?? 'N/A',
+            'barangay' => $barangay,
+            'description' => \Illuminate\Support\Str::limit($report->description ?? '', 120),
+            'title' => $report->title ?? '',
+        ];
+    })->values();
+@endphp
+<script>
+var reportsDataForExport = @json($reportsExportData);
 
 function exportFilteredReportsPDF() {
     const { jsPDF } = window.jspdf;
@@ -2820,29 +2825,24 @@ function drawFooter(pdf, pageWidth, pageHeight, margin) {
             console.log('Table sorted by urgency: Critical → High → Medium → Low');
         }
 
-        // Start auto-refresh when page loads
+        // Start auto-refresh when page loads (15s interval + socket events)
         document.addEventListener('DOMContentLoaded', function() {
-            // Check for new reports every 2 seconds for real-time updates
-            autoRefreshInterval = setInterval(checkForNewReports, 2000);
-            
-            console.log('Auto-refresh enabled: Checking for new reports every 2 seconds');
-            
-            // Auto-sort table by urgency on page load
+            autoRefreshInterval = setInterval(checkForNewReports, 15000);
             sortTableByUrgency();
+            // Also refresh on live socket events
+            window.addEventListener('adminLiveUpdate', checkForNewReports);
         });
 
-        // Stop auto-refresh when page is hidden/user switches tabs
+        // Pause auto-refresh when page is hidden
         document.addEventListener('visibilitychange', function() {
             if (document.hidden) {
                 if (autoRefreshInterval) {
                     clearInterval(autoRefreshInterval);
-                    console.log('Auto-refresh paused (page hidden)');
+                    autoRefreshInterval = null;
                 }
             } else {
                 if (!autoRefreshInterval) {
-                    autoRefreshInterval = setInterval(checkForNewReports, 2000);
-                    console.log('Auto-refresh resumed (page visible)');
-                    // Check immediately when page becomes visible
+                    autoRefreshInterval = setInterval(checkForNewReports, 15000);
                     checkForNewReports();
                 }
             }
@@ -4798,7 +4798,6 @@ function generatePDF(report) {
         }
     </style>
 
-    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
     <script>
     // Dispatch Modal Functions - Made global for onclick handlers
     window.openDispatchModal = function(reportId) {
@@ -4938,9 +4937,11 @@ function generatePDF(report) {
             }
         });
 
-        // Start auto-refresh interval (5 seconds)
-        autoRefreshInterval = setInterval(fetchReportUpdates, 5000);
-        console.log('📡 Auto-refresh initialized');
+        // Refresh every 20s + immediately on socket live updates
+        autoRefreshInterval = setInterval(fetchReportUpdates, 20000);
+        window.addEventListener('adminLiveUpdate', () => {
+            if (document.visibilityState === 'visible') fetchReportUpdates();
+        });
     }
 
     async function fetchReportUpdates() {
@@ -5069,41 +5070,9 @@ function generatePDF(report) {
         }, 4000);
     }
 
-    function initSocketLiveUpdates() {
-        const socketUrl = "{{ env('NODE_BACKEND_URL', 'https://node-server-gk1u.onrender.com') }}";
-        const socket = io(socketUrl, {
-            transports: ['websocket', 'polling']
-        });
-
-        let lastUpdate = 0;
-
-        socket.on('connect', () => {
-            console.log('🟢 Socket.io connected for live updates');
-        });
-
-        socket.on('update', () => {
-            const now = Date.now();
-            if (now - lastUpdate < 3000) return; // Debounce 3s
-            lastUpdate = now;
-            console.log('🔄 Live update received via Socket.io, fetching latest reports...');
-            if (typeof fetchReportUpdates === 'function') {
-                fetchReportUpdates();
-            }
-        });
-
-        socket.on('disconnect', () => {
-            console.log('🔴 Socket.io disconnected');
-        });
-        
-        socket.on('connect_error', (error) => {
-            console.warn('⚠️ Socket.io connection error:', error.message);
-        });
-    }
-
-    // Initialize auto-refresh when page loads
+    // Initialize auto-refresh when page loads (socket events handled via layout's adminLiveUpdate)
     document.addEventListener('DOMContentLoaded', () => {
         initAutoRefresh();
-        initSocketLiveUpdates();
     });
 
     // Pause auto-refresh when user is interacting with modals
