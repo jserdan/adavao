@@ -684,6 +684,34 @@
         </div>
     </div>
 
+    <!-- Forecasted Crime Breakdown -->
+    <div class="card" style="margin-bottom: 1.5rem;">
+        <div class="card-header">
+            <h3 class="card-title">📋 Forecasted Crime Breakdown</h3>
+            <div class="card-controls">
+                <select class="filter-select" id="breakdownSortFilter" style="min-width: 130px;">
+                    <option value="forecast-desc">Highest Forecast</option>
+                    <option value="forecast-asc">Lowest Forecast</option>
+                    <option value="change-desc">Biggest Increase</option>
+                    <option value="change-asc">Biggest Decrease</option>
+                    <option value="alpha">A–Z</option>
+                </select>
+            </div>
+        </div>
+        <div class="card-body">
+            <p style="color: var(--gray-500); font-size: 0.8rem; margin-bottom: 1rem;">
+                Per-crime-type breakdown derived from SARIMA forecast and historical distribution. Updates with crime type filter and forecast horizon.
+            </p>
+            <div id="forecastBreakdownLoading" style="text-align: center; padding: 1.5rem; display: none;">
+                <div class="spinner"></div>
+                <p style="margin-top: 0.5rem; color: var(--gray-500); font-size: 0.8rem;">Calculating breakdown...</p>
+            </div>
+            <div id="forecastBreakdownContent">
+                <div style="color: var(--gray-400); font-size: 0.85rem; text-align: center; padding: 1.5rem;">Load a forecast to see the crime breakdown.</div>
+            </div>
+        </div>
+    </div>
+
     <!-- Two Column Charts -->
     <div class="two-col" style="margin-bottom: 1.5rem;">
         <div class="card">
@@ -925,6 +953,7 @@ function attachEventListeners() {
     document.getElementById('refreshForecast').addEventListener('click', loadForecast);
     document.getElementById('riskMonthsFilter').addEventListener('change', loadBarangayRisk);
     document.getElementById('refreshWarning').addEventListener('click', loadMonthlyWarning);
+    document.getElementById('breakdownSortFilter').addEventListener('change', renderForecastBreakdown);
 }
 
 function applyFilter() {
@@ -976,6 +1005,7 @@ async function loadCrimeStats() {
             updateQuickStats(data.data.overview);
             renderTypeChart(data.data.byType);
             renderLocationChart(data.data.byLocation);
+            renderForecastBreakdown();
         }
     } catch (error) {
         console.error('Error loading crime stats:', error);
@@ -1306,6 +1336,148 @@ async function loadForecastInsights() {
     }
 }
 
+// Render Forecasted Crime Breakdown
+function renderForecastBreakdown() {
+    const contentEl = document.getElementById('forecastBreakdownContent');
+    const loadingEl = document.getElementById('forecastBreakdownLoading');
+    const sortBy = document.getElementById('breakdownSortFilter').value;
+    const crimeTypeFilter = document.getElementById('crimeTypeFilter').value;
+
+    if (!forecastData || !crimeStats?.byType?.length) {
+        contentEl.innerHTML = '<div style="color: var(--gray-400); font-size: 0.85rem; text-align: center; padding: 1.5rem;">Waiting for forecast and historical data...</div>';
+        return;
+    }
+
+    // Total forecast across the horizon
+    const totalForecast = forecastData.reduce((s, d) => s + parseFloat(d.forecast || 0), 0);
+    const horizonMonths = forecastData.length;
+    const avgForecastPerMonth = horizonMonths > 0 ? totalForecast / horizonMonths : 0;
+
+    // First-half vs second-half trend (overall)
+    const half = Math.floor(horizonMonths / 2) || 1;
+    const firstHalfAvg = forecastData.slice(0, half).reduce((s, d) => s + parseFloat(d.forecast || 0), 0) / half;
+    const secondHalfAvg = forecastData.slice(half).reduce((s, d) => s + parseFloat(d.forecast || 0), 0) / (horizonMonths - half || 1);
+
+    // Historical total
+    const totalHistorical = crimeStats.byType.reduce((s, d) => s + (parseInt(d.count) || 0), 0);
+    if (totalHistorical === 0) {
+        contentEl.innerHTML = '<div style="color: var(--gray-400); font-size: 0.85rem; text-align: center; padding: 1.5rem;">No historical crime data available for breakdown.</div>';
+        return;
+    }
+
+    // Historical monthly count (if we have monthly data)
+    const monthlyData = crimeStats.monthly || [];
+    const totalMonths = monthlyData.length || 1;
+    const historicalAvgPerMonth = monthlyData.reduce((s, d) => s + (parseInt(d.count) || 0), 0) / totalMonths;
+
+    // Build per-crime breakdown
+    let crimes = crimeStats.byType.map(d => {
+        const pct = (parseInt(d.count) || 0) / totalHistorical;
+        const projectedTotal = totalForecast * pct;
+        const projectedAvg = projectedTotal / horizonMonths;
+        const historicalAvg = (parseInt(d.count) || 0) / totalMonths;
+        const changePct = historicalAvg > 0 ? ((projectedAvg - historicalAvg) / historicalAvg * 100) : 0;
+        // Per-crime trend within the forecast horizon
+        const projFirstHalf = firstHalfAvg * pct;
+        const projSecondHalf = secondHalfAvg * pct;
+        const internalTrendPct = projFirstHalf > 0 ? ((projSecondHalf - projFirstHalf) / projFirstHalf * 100) : 0;
+
+        return {
+            type: d.type,
+            historicalCount: parseInt(d.count) || 0,
+            historicalAvg: historicalAvg,
+            pctOfTotal: pct * 100,
+            projectedTotal: projectedTotal,
+            projectedAvg: projectedAvg,
+            changePct: changePct,
+            internalTrendPct: internalTrendPct
+        };
+    });
+
+    // If a specific crime type is selected, filter to just that one
+    if (crimeTypeFilter) {
+        crimes = crimes.filter(c => c.type.toUpperCase() === crimeTypeFilter.toUpperCase());
+    }
+
+    // Sort
+    switch (sortBy) {
+        case 'forecast-desc': crimes.sort((a, b) => b.projectedAvg - a.projectedAvg); break;
+        case 'forecast-asc': crimes.sort((a, b) => a.projectedAvg - b.projectedAvg); break;
+        case 'change-desc': crimes.sort((a, b) => b.changePct - a.changePct); break;
+        case 'change-asc': crimes.sort((a, b) => a.changePct - b.changePct); break;
+        case 'alpha': crimes.sort((a, b) => a.type.localeCompare(b.type)); break;
+    }
+
+    if (crimes.length === 0) {
+        contentEl.innerHTML = '<div style="color: var(--gray-400); font-size: 0.85rem; text-align: center; padding: 1.5rem;">No matching crime data found.</div>';
+        return;
+    }
+
+    // Find max projected avg for bar scaling
+    const maxAvg = Math.max(...crimes.map(c => c.projectedAvg), 1);
+
+    // Period label
+    const firstDate = forecastData[0]?.date?.substring(0, 7) || '';
+    const lastDate = forecastData[forecastData.length - 1]?.date?.substring(0, 7) || '';
+
+    let html = `<div style="font-size: 0.75rem; color: var(--gray-500); margin-bottom: 0.75rem;">Forecast period: <strong>${firstDate}</strong> to <strong>${lastDate}</strong> (${horizonMonths} months) &nbsp;|&nbsp; Total projected: <strong>${Math.round(totalForecast).toLocaleString()}</strong> incidents</div>`;
+
+    html += '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 0.75rem;">';
+
+    crimes.forEach(c => {
+        // Determine trend indicators
+        const isUp = c.changePct > 5;
+        const isDown = c.changePct < -5;
+        const trendIcon = isUp ? '↑' : (isDown ? '↓' : '→');
+        const trendColor = isUp ? '#dc2626' : (isDown ? '#16a34a' : '#6b7280');
+        const bgColor = isUp ? '#fef2f2' : (isDown ? '#f0fdf4' : '#f9fafb');
+        const borderColor = isUp ? '#fecaca' : (isDown ? '#bbf7d0' : '#e5e7eb');
+        const barWidth = maxAvg > 0 ? Math.max(4, (c.projectedAvg / maxAvg) * 100) : 0;
+        const barColor = isUp ? '#ef4444' : (isDown ? '#22c55e' : '#9ca3af');
+
+        // Internal horizon trend
+        const hTrendIcon = c.internalTrendPct > 3 ? '📈' : (c.internalTrendPct < -3 ? '📉' : '➡️');
+
+        html += `
+        <div style="background: ${bgColor}; border: 1px solid ${borderColor}; border-radius: 8px; padding: 0.75rem; display: flex; flex-direction: column; gap: 0.4rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-weight: 700; font-size: 0.85rem; color: #1f2937;">${escapeHtml(c.type)}</span>
+                <span style="color: ${trendColor}; font-weight: 700; font-size: 0.85rem;">${trendIcon} ${Math.abs(c.changePct).toFixed(1)}%</span>
+            </div>
+            <!-- Mini bar -->
+            <div style="background: #e5e7eb; border-radius: 4px; height: 6px; overflow: hidden;">
+                <div style="background: ${barColor}; height: 100%; width: ${barWidth.toFixed(1)}%; border-radius: 4px; transition: width 0.3s;"></div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.25rem; font-size: 0.72rem; color: #4b5563;">
+                <div><span style="color: #9ca3af;">Avg/mo</span><br><strong>${c.projectedAvg.toFixed(1)}</strong></div>
+                <div><span style="color: #9ca3af;">Total</span><br><strong>${Math.round(c.projectedTotal).toLocaleString()}</strong></div>
+                <div><span style="color: #9ca3af;">Share</span><br><strong>${c.pctOfTotal.toFixed(1)}%</strong></div>
+            </div>
+            <div style="font-size: 0.7rem; color: #6b7280; display: flex; justify-content: space-between;">
+                <span>${hTrendIcon} Horizon: ${c.internalTrendPct > 0 ? '+' : ''}${c.internalTrendPct.toFixed(1)}%</span>
+                <span>Hist avg: ${c.historicalAvg.toFixed(1)}/mo</span>
+            </div>
+        </div>`;
+    });
+
+    html += '</div>';
+
+    // Summary row if not filtered to one crime
+    if (!crimeTypeFilter && crimes.length > 1) {
+        const increasing = crimes.filter(c => c.changePct > 5).length;
+        const decreasing = crimes.filter(c => c.changePct < -5).length;
+        const stable = crimes.length - increasing - decreasing;
+        html += `<div style="margin-top: 0.75rem; font-size: 0.75rem; color: var(--gray-500); display: flex; gap: 1rem; flex-wrap: wrap;">`;
+        html += `<span>📊 ${crimes.length} crime types`;
+        if (increasing > 0) html += ` &nbsp;|&nbsp; <span style="color: #dc2626;">↑ ${increasing} increasing</span>`;
+        if (decreasing > 0) html += ` &nbsp;|&nbsp; <span style="color: #16a34a;">↓ ${decreasing} decreasing</span>`;
+        if (stable > 0) html += ` &nbsp;|&nbsp; <span style="color: #6b7280;">→ ${stable} stable</span>`;
+        html += `</span></div>`;
+    }
+
+    contentEl.innerHTML = html;
+}
+
 // Load SARIMA Forecast
 async function loadForecast() {
     const horizon = document.getElementById('forecastHorizon').value;
@@ -1350,6 +1522,7 @@ async function loadForecast() {
             
             const historicalData = data.historical?.length > 0 ? data.historical : (crimeStats?.monthly || []);
             renderTrendChart(historicalData, data.data);
+            renderForecastBreakdown();
         } else {
             throw new Error(data.message || 'Invalid forecast data');
         }
@@ -1358,6 +1531,7 @@ async function loadForecast() {
         statusDot.className = 'status-dot offline';
         statusText.textContent = 'SARIMA API Offline';
         infoBox.style.display = 'none';
+        renderForecastBreakdown();
         
         container.innerHTML = '<canvas id="trendChart"></canvas>';
         if (crimeStats?.monthly?.length > 0) {
