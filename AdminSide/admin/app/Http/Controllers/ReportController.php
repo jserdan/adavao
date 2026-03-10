@@ -513,9 +513,26 @@ class ReportController extends Controller
         }
 
         // Crime urgency categories (case-insensitive matching)
-        $CRITICAL_CRIMES = ['Murder', 'Homicide', 'Rape', 'Sexual Assault'];
-        $HIGH_PRIORITY = ['Robbery', 'Physical Injury', 'Domestic Violence', 'Missing Person', 'Harassment'];
-        $MEDIUM_PRIORITY = ['Theft', 'Burglary', 'Break-in', 'Carnapping', 'Motornapping', 'Motorcycle Theft', 'Threats', 'Fraud', 'Cybercrime'];
+        // Aligned with mobile app crime types from UserSide
+        $CRITICAL_CRIMES = [
+            'Murder', 'Homicide', 'Rape', 'Sexual Assault',
+            'Kidnapping', 'Abduction', 'Stabbing', 'Shooting',
+            'Human Trafficking', 'Child Abuse', 'Exploitation'
+        ];
+        $HIGH_PRIORITY = [
+            'Robbery', 'Holdup', 'Physical Assault', 'Physical Injury',
+            'Domestic Violence', 'Missing Person', 'Harassment',
+            'Arson', 'Fire Emergency', 'Drug', 'Illegal Firearms',
+            'Weapons', 'Sextortion', 'Sexual Harassment'
+        ];
+        $MEDIUM_PRIORITY = [
+            'Theft', 'Pickpocketing', 'Burglary', 'Break-in',
+            'Carnapping', 'Motornapping', 'Motorcycle Theft', 'Vehicle Theft',
+            'Threats', 'Intimidation', 'Fraud', 'Scam', 'Phishing',
+            'Cybercrime', 'Cyberbullying', 'Hacking', 'Identity Theft',
+            'Vandalism', 'Trespassing', 'Road Accident',
+            'Online Threats', 'Medical Emergency'
+        ];
 
         // Check if any crime type matches Focus Crimes and determine urgency
         $isFocusCrime = false;
@@ -1168,7 +1185,7 @@ class ReportController extends Controller
         try {
             $user = auth()->user();
             
-            $query = Report::with(['user', 'location', 'policeStation'])
+            $query = Report::with(['user', 'location', 'policeStation', 'dispatch'])
                 ->join('locations', 'reports.location_id', '=', 'locations.location_id')
                 ->whereNotNull('locations.latitude')
                 ->whereNotNull('locations.longitude')
@@ -1226,9 +1243,18 @@ class ReportController extends Controller
 
             // Format reports for response
             $formattedReports = $reports->map(function($report) {
+                $dispatchData = null;
+                if ($report->dispatch) {
+                    $dispatchData = [
+                        'status' => $report->dispatch->status,
+                        'arrived_at' => $report->dispatch->arrived_at ? $report->dispatch->arrived_at->toIso8601String() : null,
+                        'completed_at' => $report->dispatch->completed_at ? $report->dispatch->completed_at->toIso8601String() : null,
+                    ];
+                }
                 return [
                     'report_id' => $report->report_id,
                     'status' => $report->status,
+                    'is_valid' => $report->is_valid ?? 'checking_for_report_validity',
                     'report_type' => $report->report_type,
                     'description' => $report->description,
                     'urgency_score' => $report->urgency_score,
@@ -1237,6 +1263,7 @@ class ReportController extends Controller
                     'user_name' => $report->user ? ($report->user->first_name . ' ' . $report->user->last_name) : 'Anonymous',
                     'location_address' => $report->location ? $report->location->address : 'Unknown',
                     'station_name' => $report->policeStation ? $report->policeStation->station_name : 'Unassigned',
+                    'dispatch' => $dispatchData,
                 ];
             });
 

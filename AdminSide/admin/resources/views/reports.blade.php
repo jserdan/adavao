@@ -948,7 +948,7 @@
 
         .media-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
             gap: 0.75rem;
         }
 
@@ -1331,7 +1331,7 @@
 
         .media-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
             gap: 1rem;
             margin-bottom: 1rem;
         }
@@ -1353,15 +1353,17 @@
 
         .media-item img {
             width: 100%;
-            height: 150px;
-            object-fit: cover;
+            height: 220px;
+            object-fit: contain;
+            background: #f3f4f6;
             display: block;
         }
 
         .media-item video {
             width: 100%;
-            height: 150px;
-            object-fit: cover;
+            height: 220px;
+            object-fit: contain;
+            background: #000;
             display: block;
         }
 
@@ -1425,7 +1427,7 @@
             }
 
             .media-grid {
-                grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+                grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
             }
 
             .modal-content {
@@ -1623,7 +1625,7 @@
                     <th class="sortable" data-column="6" style="width: 75px;" onclick="sortTable(6)">User Status</th>
                      <th class="sortable" data-column="7" style="width: 100px;" onclick="sortTable(7)">Date</th>
                      <th class="sortable" data-column="8" style="width: 100px;" onclick="sortTable(8)">Updated</th>
-                     <th class="sortable" data-column="9" style="width: 110px;" onclick="sortTable(9)">Status</th>
+                     <th class="sortable" data-column="9" style="width: 110px;" onclick="sortTable(9)">Report Status</th>
                      <th style="width: 115px;">Validity</th>
                      <th style="width: 110px;">Action</th>
                 </tr>
@@ -1811,18 +1813,6 @@
                                             <path d="m9 18 6-6-6-6" />
                                         </svg>
                                     </button>
-                                    
-                                    <!-- Dispatch Button -->
-                                    @if(($report->status === 'pending' || $report->status === 'investigating') && !$report->is_anonymous)
-                                    <button 
-                                        class="action-btn" 
-                                        title="Transfer Patrol"
-                                        onclick="openDispatchModal({{ $report->report_id }})"
-                                        style="background: #3b82f6; color: white; margin-left: 4px;"
-                                    >
-                                        🔁
-                                    </button>
-                                    @endif
                                 </td>
                             </tr>
                 @empty
@@ -3308,7 +3298,7 @@ function drawFooter(pdf, pageWidth, pageHeight, margin) {
                                     if (isSensitive) {
                                         mediaContent += `
                                             <div class="media-item sensitive" id="media-item-${mediaId}">
-                                                <video src="${mediaUrl}" style="width: 100%; height: 150px; object-fit: cover;" playsinline></video>
+                                                <video src="${mediaUrl}" style="width: 100%; height: 220px; object-fit: contain; background: #000;" playsinline></video>
                                                 <div class="sensitive-overlay">
                                                     <div style="font-weight: 800; font-size: 0.8rem;">Sensitive content</div>
                                                     <div style="font-size: 0.7rem; opacity: 0.9;">Click reveal to view</div>
@@ -3320,7 +3310,7 @@ function drawFooter(pdf, pageWidth, pageHeight, margin) {
                                     } else {
                                         mediaContent += `
                                             <div class="media-item">
-                                                <video src="${mediaUrl}" style="width: 100%; height: 150px; object-fit: cover;" controls></video>
+                                                <video src="${mediaUrl}" style="width: 100%; height: 220px; object-fit: contain; background: #000;" controls></video>
                                                 <span class="media-type-badge">🎥 Video</span>
                                             </div>
                                         `;

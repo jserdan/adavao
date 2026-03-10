@@ -608,18 +608,14 @@
     <!-- Operational Status -->
     <div class="card" style="margin-bottom: 1.5rem;">
         <div class="card-header">
-            <h3 class="card-title">👮 Operational Status</h3>
-            <span style="font-size: 0.75rem; color: var(--gray-500);">Real-time deployment metrics</span>
+            <h3 class="card-title">� Operational Overview</h3>
+            <span style="font-size: 0.75rem; color: var(--gray-500);">Real-time dispatch metrics</span>
         </div>
         <div class="card-body">
             <div class="metrics-grid">
-                <div class="metric-box info">
-                    <div class="metric-value" id="patrolOnDuty">-</div>
-                    <div class="metric-label">Total Patrol Users</div>
-                </div>
-                <div class="metric-box success">
-                    <div class="metric-value" id="patrolTotal">-</div>
-                    <div class="metric-label">Total Officers</div>
+                <div class="metric-box purple">
+                    <div class="metric-value" id="activeDispatches2">-</div>
+                    <div class="metric-label">Active Dispatches</div>
                 </div>
                 <div class="metric-box warning" id="overdueBox">
                     <div class="metric-value" id="overdueDispatches">-</div>
@@ -819,9 +815,6 @@
                             <thead>
                                 <tr>
                                     <th>Station / Area</th>
-                                    <th style="text-align: center;">Officers On Duty</th>
-                                    <th style="text-align: center;">Active Dispatches</th>
-                                    <th style="text-align: center;">Overdue</th>
                                     <th>Recommendation</th>
                                 </tr>
                             </thead>
@@ -1010,8 +1003,8 @@ async function loadDbSummary() {
             document.getElementById('resolvedCases').textContent = formatNumber(d.resolved);
             document.getElementById('pendingReview').textContent = formatNumber(d.checking);
             document.getElementById('activeDispatches').textContent = formatNumber(d.active_dispatches);
-            document.getElementById('patrolOnDuty').textContent = formatNumber(d.patrol_on_duty);
-            document.getElementById('patrolTotal').textContent = formatNumber(d.patrol_total);
+            const ad2 = document.getElementById('activeDispatches2');
+            if (ad2) ad2.textContent = formatNumber(d.active_dispatches);
             document.getElementById('fakeReports').textContent = formatNumber(d.fake_reports);
             document.getElementById('hoaxReports').textContent = formatNumber(d.invalid);
         }
@@ -1197,20 +1190,17 @@ async function loadForecastInsights() {
                 const rowBg = station.overdue_dispatches > 0 ? '#fef2f2' : (isOk ? '#f0fdf4' : '#fffbeb');
                 const sugColor = station.overdue_dispatches > 0 ? '#dc2626' : (isOk ? '#16a34a' : '#d97706');
                 const sugText = isOk 
-                    ? 'Operations normal. Crime rate well managed.' 
+                    ? 'Operations normal. Crime rate well managed in this area.' 
                     : station.suggestion;
                 
                 deployHtml += `
                     <tr style="background: ${rowBg};">
                         <td style="font-weight: 600;">${escapeHtml(station.station_name)}</td>
-                        <td style="text-align: center;">${station.patrol_on_duty} / ${station.patrol_total}</td>
-                        <td style="text-align: center;">${station.active_dispatches}</td>
-                        <td style="text-align: center; color: ${station.overdue_dispatches > 0 ? '#dc2626' : '#16a34a'}; font-weight: 600;">${station.overdue_dispatches}</td>
                         <td style="color: ${sugColor}; font-size: 0.8rem;">${escapeHtml(sugText)}</td>
                     </tr>`;
             });
         } else {
-            deployHtml = `<tr><td colspan="5" style="text-align: center; color: var(--gray-500); padding: 1rem;">No station data available.</td></tr>`;
+            deployHtml = `<tr><td colspan="2" style="text-align: center; color: var(--gray-500); padding: 1rem;">No station data available.</td></tr>`;
         }
         deployBody.innerHTML = deployHtml;
 
@@ -1249,9 +1239,6 @@ async function loadForecastInsights() {
                     <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 1rem;">
                         <div style="font-weight: 700; color: #166534; font-size: 0.85rem; margin-bottom: 0.25rem;">
                             🏢 ${escapeHtml(station.station_name)}
-                        </div>
-                        <div style="color: #15803d; font-size: 0.8rem;">
-                            ${station.patrol_on_duty} officers on duty, ${station.active_dispatches} active dispatches
                         </div>
                         <div style="color: #166534; font-size: 0.75rem; margin-top: 0.25rem;">
                             ✅ No overdue dispatches. Crime rate well managed in this area.

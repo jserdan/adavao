@@ -139,6 +139,10 @@ class DispatchController extends Controller
                 'notes' => $request->notes,
             ]);
 
+            // Update report status to investigating when dispatch is created
+            $report->status = 'investigating';
+            $report->save();
+
             // Load relationships BEFORE sending notification (required for notification content)
             $dispatch->load(['report.location', 'patrolOfficer']);
 
@@ -221,9 +225,18 @@ class DispatchController extends Controller
                         $dispatch->validation_notes = $request->validation_notes;
                         $dispatch->validated_at = now();
                         
-                        // Update report validity
+                        // Update report validity and status based on patrol feedback
                         $report = $dispatch->report;
-                        $report->is_valid = $request->is_valid ? 'valid' : 'invalid';
+                        if ($request->is_valid) {
+                            // Valid report: keep investigating, mark as valid
+                            $report->is_valid = 'valid';
+                            $report->validated_at = now();
+                        } else {
+                            // Fake/invalid report: resolve it
+                            $report->is_valid = 'invalid';
+                            $report->status = 'resolved';
+                            $report->validated_at = now();
+                        }
                         $report->save();
                     }
                     break;
