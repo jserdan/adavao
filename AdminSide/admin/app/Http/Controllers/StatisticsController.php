@@ -1386,7 +1386,7 @@ class StatisticsController extends Controller
                         $entry['live_reports'] = $dbRow ? $dbRow->report_count : 0;
                         // Upgrade risk if many recent reports
                         if ($entry['live_reports'] >= 5 && ($entry['risk_level'] ?? '') === 'LOW') {
-                            $entry['risk_level'] = 'MODERATE';
+                            $entry['risk_level'] = 'MEDIUM';
                             $entry['warning'] = ($entry['warning'] ?? '') . ' (elevated by recent reports)';
                         }
                     }
@@ -1396,7 +1396,7 @@ class StatisticsController extends Controller
                     $sarimaBarangays = collect($data)->pluck('barangay')->toArray();
                     foreach ($dbCounts as $brgy => $row) {
                         if (!in_array($brgy, $sarimaBarangays) && $row->report_count >= 2) {
-                            $risk = $row->report_count >= 10 ? 'HIGH' : ($row->report_count >= 5 ? 'MODERATE' : 'LOW');
+                            $risk = $row->report_count >= 10 ? 'HIGH' : ($row->report_count >= 5 ? 'MEDIUM' : 'LOW');
                             $data[] = [
                                 'barangay' => $brgy,
                                 'recent_crimes' => 0,

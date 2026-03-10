@@ -1277,7 +1277,7 @@ async function loadForecastInsights() {
                     </div>`;
             }
 
-            const medRisk = riskData.filter(b => b.risk_level === 'MEDIUM');
+            const medRisk = riskData.filter(b => b.risk_level === 'MEDIUM' || b.risk_level === 'MODERATE');
             if (medRisk.length > 0) {
                 const medNames = medRisk.slice(0, 4).map(b => escapeHtml(b.barangay)).join(', ');
                 const medExtra = medRisk.length > 4 ? ` +${medRisk.length - 4} more` : '';
@@ -1828,7 +1828,7 @@ function exportCrimeDataCSV() {
     const month = document.getElementById('monthFilter').value;
     const crimeType = document.getElementById('crimeTypeFilter').value;
     
-    let url = '/api/statistics/export-crime-data';
+    let url = '/api/statistics/export';
     const params = [];
     if (year) params.push(`year=${year}`);
     if (month) params.push(`month=${month}`);
@@ -1880,7 +1880,7 @@ function exportFullReport() {
     csv += `Resolved Cases,${document.getElementById('resolvedCases').textContent}\n`;
     csv += `Pending Review,${document.getElementById('pendingReview').textContent}\n`;
     csv += `Active Dispatches,${document.getElementById('activeDispatches').textContent}\n`;
-    csv += `Total Patrol Users,${document.getElementById('patrolOnDuty').textContent}\n\n`;
+    csv += `False Reports,${document.getElementById('fakeReports').textContent}\n\n`;
     
     // Crime by type
     if (crimeStats?.byType?.length > 0) {
