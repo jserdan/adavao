@@ -2103,7 +2103,7 @@ function updateSLATimers() {
             return `${s}sec`;
         }
 
-        if (elapsedSeconds < threeMinutes) {
+        if (elapsedSeconds <= threeMinutes) {
             const remainingSeconds = threeMinutes - elapsedSeconds;
             timer.textContent = formatTime(remainingSeconds);
             timer.className = 'sla-timer countdown';
@@ -2133,8 +2133,14 @@ function updateRuleStatuses() {
         // If already validated, status is frozen
         if (validatedAt) return;
         
-        // If still checking, auto-update to exceeded when past 3 min
-        if (isValid === 'checking_for_report_validity' || !isValid) {
+        // If still pending/checking, auto-update to exceeded when past 3 min
+        const isPendingRule =
+            isValid === 'checking_for_report_validity' ||
+            !isValid ||
+            el.classList.contains('pending') ||
+            el.textContent.trim().toLowerCase() === 'pending';
+
+        if (isPendingRule) {
             const elapsed = now - createdAt;
             if (elapsed > 180) {
                 el.textContent = 'Exceeded';

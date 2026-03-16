@@ -464,7 +464,7 @@
                 return `${s}sec`;
             }
             
-            if (elapsedSeconds < threeMinutes) {
+            if (elapsedSeconds <= threeMinutes) {
                 timer.textContent = formatTime(elapsedSeconds);
                 timer.className = 'sla-timer countdown';
             } else {
