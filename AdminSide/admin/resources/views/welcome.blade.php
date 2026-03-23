@@ -1036,14 +1036,14 @@
                     let predictedValue = Math.round(parseFloat(rawValue));
 
                     // Make AI highlight responsive to dashboard date filter using filtered historical context.
-                    // Blend model forecast with filtered historical average when a dashboard filter is active.
+                    // Heavily weight filtered historical average when dashboard filter is active.
                     if (hasDashboardFilter && Array.isArray(data.historical) && data.historical.length > 0) {
                         const histValues = data.historical
                             .map(h => parseFloat(h?.count ?? h?.value ?? 0))
                             .filter(v => Number.isFinite(v));
                         if (histValues.length > 0 && Number.isFinite(predictedValue)) {
                             const histAvg = histValues.reduce((a, b) => a + b, 0) / histValues.length;
-                            predictedValue = Math.round((predictedValue * 0.6) + (histAvg * 0.4));
+                            predictedValue = Math.round((predictedValue * 0.2) + (histAvg * 0.8));
                         }
                     }
                     

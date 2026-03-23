@@ -652,10 +652,10 @@
                     <option value="VANDALISM">Vandalism</option>
                 </select>
                 <select class="filter-select" id="forecastHorizon">
-                    <option value="6">Historical Data + 6 Month Forecast</option>
-                    <option value="12" selected>Historical Data + 12 Month Forecast</option>
-                    <option value="18">Historical Data + 18 Month Forecast</option>
-                    <option value="24">Historical Data + 24 Month Forecast</option>
+                    <option value="6">Historical Data + 6 Months Forecasted Crime Type</option>
+                    <option value="12" selected>Historical Data + 12 Months Forecasted Crime Type</option>
+                    <option value="18">Historical Data + 18 Months Forecasted Crime Type</option>
+                    <option value="24">Historical Data + 24 Months Forecasted Crime Type</option>
                 </select>
                 <button class="btn btn-secondary" id="refreshForecast">🔄 Refresh</button>
             </div>

@@ -154,11 +154,18 @@ class StatisticsController extends Controller
 
             // Always provide historical points aligned with active statistics filter
             try {
-                $historical = $this->_getCrimeStats($month, $year);
-                $response['historical'] = $historical['monthly'] ?? [];
+                if (!empty($crimeType)) {
+                    $response['historical'] = $this->getCombinedHistoricalByCrimeType($crimeType, $month, $year);
+                } else {
+                    $historical = $this->_getCrimeStats($month, $year);
+                    $response['historical'] = $historical['monthly'] ?? [];
+                }
             } catch (\Throwable $e) {
                 $response['historical'] = [];
             }
+
+            // Make forecast context-aware when dashboard/statistics filters are active.
+            $response = $this->applyFilterContextScaling($response, $month, $year, $crimeType);
 
             // Real-time online adjustment using fresh submitted reports.
             // This keeps forecasts responsive when new reports arrive between retraining windows.
@@ -274,6 +281,78 @@ class StatisticsController extends Controller
             ];
         } catch (\Throwable $e) {
             // Keep base forecast if adjustment query fails
+        }
+
+        return $response;
+    }
+
+    private function applyFilterContextScaling(array $response, $month = null, $year = null, $crimeType = null): array
+    {
+        if ((!$month && !$year) || !isset($response['data']) || !is_array($response['data']) || count($response['data']) === 0) {
+            return $response;
+        }
+
+        try {
+            $scopeHistory = $response['historical'] ?? [];
+            $scopeValues = collect($scopeHistory)
+                ->pluck('count')
+                ->map(fn($v) => floatval($v))
+                ->filter(fn($v) => is_finite($v) && $v >= 0)
+                ->values();
+
+            if ($scopeValues->isEmpty()) {
+                return $response;
+            }
+
+            if (!empty($crimeType)) {
+                $baseHistory = $this->getCombinedHistoricalByCrimeType($crimeType, null, null);
+            } else {
+                $base = $this->_getCrimeStats(null, null);
+                $baseHistory = $base['monthly'] ?? [];
+            }
+
+            $baseValues = collect($baseHistory)
+                ->pluck('count')
+                ->map(fn($v) => floatval($v))
+                ->filter(fn($v) => is_finite($v) && $v > 0)
+                ->values();
+
+            if ($baseValues->isEmpty()) {
+                return $response;
+            }
+
+            $scopeAvg = $scopeValues->avg();
+            $baseAvg = $baseValues->avg();
+
+            if ($baseAvg <= 0) {
+                return $response;
+            }
+
+            $multiplier = $scopeAvg / $baseAvg;
+            $multiplier = max(0.35, min(2.50, $multiplier));
+
+            $adjusted = [];
+            foreach ($response['data'] as $point) {
+                $forecast = floatval($point['forecast'] ?? 0);
+                $lower = floatval($point['lower_ci'] ?? $forecast);
+                $upper = floatval($point['upper_ci'] ?? $forecast);
+
+                $point['forecast'] = round(max(0, $forecast * $multiplier), 2);
+                $point['lower_ci'] = round(max(0, $lower * $multiplier), 2);
+                $point['upper_ci'] = round(max(0, $upper * $multiplier), 2);
+
+                $adjusted[] = $point;
+            }
+
+            $response['data'] = $adjusted;
+            $response['filter_context'] = [
+                'applied' => true,
+                'scope_average' => round($scopeAvg, 2),
+                'base_average' => round($baseAvg, 2),
+                'multiplier' => round($multiplier, 3),
+            ];
+        } catch (\Throwable $e) {
+            // keep original forecast on any scaling error
         }
 
         return $response;
@@ -1373,6 +1452,66 @@ class StatisticsController extends Controller
         });
         
         return $result;
+    }
+
+    private function getCombinedHistoricalByCrimeType($crimeType, $month = null, $year = null): array
+    {
+        $monthly = [];
+
+        // CSV baseline
+        foreach ($this->getHistoricalByCrimeType($crimeType) as $row) {
+            $rowYear = strval($row['year']);
+            $rowMonth = str_pad(strval($row['month']), 2, '0', STR_PAD_LEFT);
+            $ym = $rowYear . '-' . $rowMonth;
+
+            if ($month && preg_match('/^\d{4}-\d{2}$/', $month) && $ym !== $month) continue;
+            if ($year && $rowYear !== strval($year)) continue;
+
+            if (!isset($monthly[$ym])) {
+                $monthly[$ym] = ['year' => intval($rowYear), 'month' => intval($rowMonth), 'count' => 0];
+            }
+            $monthly[$ym]['count'] += floatval($row['count'] ?? 0);
+        }
+
+        // Validated DB reports merge
+        try {
+            $dbQuery = DB::table('reports')
+                ->where('is_valid', self::REPORT_VALID)
+                ->whereRaw("UPPER(COALESCE(report_type::text, '')) LIKE ?", ['%' . strtoupper($crimeType) . '%']);
+
+            if ($month && preg_match('/^\d{4}-\d{2}$/', $month)) {
+                [$y, $m] = explode('-', $month);
+                $dbQuery->whereYear('created_at', intval($y))
+                    ->whereMonth('created_at', intval($m));
+            } elseif ($year) {
+                $dbQuery->whereYear('created_at', intval($year));
+            }
+
+            $dbRows = $dbQuery
+                ->selectRaw("to_char(created_at, 'YYYY-MM') as ym, COUNT(*) as c")
+                ->groupBy('ym')
+                ->orderBy('ym', 'asc')
+                ->get();
+
+            foreach ($dbRows as $row) {
+                $ym = strval($row->ym);
+                [$y, $m] = explode('-', $ym);
+
+                if (!isset($monthly[$ym])) {
+                    $monthly[$ym] = ['year' => intval($y), 'month' => intval($m), 'count' => 0];
+                }
+                $monthly[$ym]['count'] += intval($row->c);
+            }
+        } catch (\Throwable $e) {
+            // keep CSV-only if DB merge fails
+        }
+
+        return collect($monthly)
+            ->sortBy(function ($item) {
+                return sprintf('%04d-%02d', $item['year'], $item['month']);
+            })
+            ->values()
+            ->all();
     }
 
     /**
