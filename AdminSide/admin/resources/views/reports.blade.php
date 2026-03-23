@@ -2913,6 +2913,15 @@ function drawFooter(pdf, pageWidth, pageHeight, margin) {
             const rows = Array.from(tbody.getElementsByTagName('tr'));
             const headers = table.getElementsByTagName('th');
 
+            const getUrgencyRank = (text) => {
+                const t = String(text || '').toUpperCase();
+                if (t.includes('CRITICAL')) return 4;
+                if (t.includes('HIGH')) return 3;
+                if (t.includes('MEDIUM')) return 2;
+                if (t.includes('LOW')) return 1;
+                return 0;
+            };
+
             // Toggle sort direction
             if (!sortDirections[columnIndex]) {
                 sortDirections[columnIndex] = 'asc';
@@ -2941,6 +2950,11 @@ function drawFooter(pdf, pageWidth, pageHeight, margin) {
                 if (columnIndex === 0) {
                     aValue = parseInt(aValue) || 0;
                     bValue = parseInt(bValue) || 0;
+                }
+                // Handle urgency rank sorting (Critical > High > Medium > Low)
+                else if (columnIndex === 3) {
+                    aValue = getUrgencyRank(aValue);
+                    bValue = getUrgencyRank(bValue);
                 }
                 // Handle dates (columns 7 and 8 - Date Reported and Updated At)
                 else if (columnIndex === 7 || columnIndex === 8) {

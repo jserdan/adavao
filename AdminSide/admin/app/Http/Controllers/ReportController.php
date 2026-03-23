@@ -512,27 +512,10 @@ class ReportController extends Controller
             }
         }
 
-        // Crime urgency categories (case-insensitive matching)
-        // Aligned with mobile app crime types from UserSide
-        $CRITICAL_CRIMES = [
-            'Murder', 'Homicide', 'Rape', 'Sexual Assault',
-            'Kidnapping', 'Abduction', 'Stabbing', 'Shooting',
-            'Human Trafficking', 'Child Abuse', 'Exploitation'
-        ];
-        $HIGH_PRIORITY = [
-            'Robbery', 'Holdup', 'Physical Assault', 'Physical Injury',
-            'Domestic Violence', 'Missing Person', 'Harassment',
-            'Arson', 'Fire Emergency', 'Drug', 'Illegal Firearms',
-            'Weapons', 'Sextortion', 'Sexual Harassment'
-        ];
-        $MEDIUM_PRIORITY = [
-            'Theft', 'Pickpocketing', 'Burglary', 'Break-in',
-            'Carnapping', 'Motornapping', 'Motorcycle Theft', 'Vehicle Theft',
-            'Threats', 'Intimidation', 'Fraud', 'Scam', 'Phishing',
-            'Cybercrime', 'Cyberbullying', 'Hacking', 'Identity Theft',
-            'Vandalism', 'Trespassing', 'Road Accident',
-            'Online Threats', 'Medical Emergency'
-        ];
+        // Strict urgency ranking (highest matched category wins for multi-crime reports)
+        $CRITICAL_CRIMES = ['Murder', 'Homicide', 'Rape', 'Sexual Assault'];
+        $HIGH_PRIORITY = ['Robbery', 'Physical Injury', 'Domestic Violence', 'Missing Person', 'Harassment'];
+        $MEDIUM_PRIORITY = ['Theft', 'Burglary', 'Break-in', 'Carnapping', 'Motornapping', 'Threats', 'Fraud', 'Cybercrime'];
 
         // Check if any crime type matches Focus Crimes and determine urgency
         $isFocusCrime = false;
@@ -571,11 +554,6 @@ class ReportController extends Controller
         if ($hasCritical) $urgencyScore = 100;
         elseif ($hasHigh) $urgencyScore = 75;
         elseif ($hasMedium) $urgencyScore = 50;
-
-        // Bonus: +10 if report has evidence files
-        if ($report->media && $report->media->count() > 0) {
-            $urgencyScore = min(100, $urgencyScore + 10);
-        }
 
         // Check information sufficiency
         $hasSufficientInfo = !empty($report->description) &&

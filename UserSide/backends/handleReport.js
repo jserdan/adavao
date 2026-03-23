@@ -724,19 +724,6 @@ async function submitReport(req, res) {
       urgencyLevel = 'MEDIUM';
     }
 
-    // Bonus points for having evidence (+10)
-    if (hasFiles) {
-      urgencyScore = Math.min(100, urgencyScore + 10);
-      console.log(`📸 Evidence bonus: +10 points`);
-    }
-
-    // Recency bonus: Reports within 1 hour get +5
-    // Note: hoursDiff was calculated earlier for validation
-    if (hoursDiff < 1) {
-      urgencyScore = Math.min(100, urgencyScore + 5);
-      console.log(`⏱️ Recency bonus: +5 points (${hoursDiff.toFixed(1)}h ago)`);
-    }
-
     console.log(`🚨 FINAL Urgency Score: ${urgencyScore}/100 (${urgencyLevel})`);
 
     // Create location record
