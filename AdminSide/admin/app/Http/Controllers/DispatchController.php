@@ -472,14 +472,6 @@ class DispatchController extends Controller
                 'updated_at' => now(),
             ];
 
-            if (Schema::hasColumn('users_public', 'user_role')) {
-                $insertData['user_role'] = 'patrol_officer';
-                $updateData['user_role'] = 'patrol_officer';
-            }
-            if (Schema::hasColumn('users_public', 'role')) {
-                $insertData['role'] = 'patrol_officer';
-                $updateData['role'] = 'patrol_officer';
-            }
             if (Schema::hasColumn('users_public', 'is_on_duty')) {
                 $insertData['is_on_duty'] = false;
                 $updateData['is_on_duty'] = false;
@@ -543,12 +535,37 @@ class DispatchController extends Controller
             $dispatch->load(['report.location']);
 
             // Send push notification to ALL patrol officers
-            $allOfficers = DB::select("
-                SELECT u.id, u.push_token
-                FROM users_public u
-                WHERE LOWER(COALESCE(u.user_role::text, u.role::text, '')) = 'patrol_officer'
-                  AND u.push_token IS NOT NULL AND u.push_token != ''
-            ");
+            $hasUserRole = Schema::hasColumn('users_public', 'user_role');
+            $hasRole = Schema::hasColumn('users_public', 'role');
+            $hasPushToken = Schema::hasColumn('users_public', 'push_token');
+
+            $allOfficersQuery = DB::table('users_public as u')
+                ->select('u.id', DB::raw($hasPushToken ? 'u.push_token as push_token' : 'NULL as push_token'));
+
+            if ($hasPushToken) {
+                $allOfficersQuery->whereNotNull('u.push_token')->where('u.push_token', '!=', '');
+            }
+
+            if ($hasUserRole && $hasRole) {
+                $allOfficersQuery->whereRaw(
+                    "LOWER(REPLACE(COALESCE(u.user_role::text, u.role::text, ''), ' ', '_')) = ? OR LOWER(COALESCE(u.email, '')) LIKE ?",
+                    ['patrol_officer', 'ps%.patrol@alertdavao.local']
+                );
+            } elseif ($hasUserRole) {
+                $allOfficersQuery->whereRaw(
+                    "LOWER(REPLACE(COALESCE(u.user_role::text, ''), ' ', '_')) = ? OR LOWER(COALESCE(u.email, '')) LIKE ?",
+                    ['patrol_officer', 'ps%.patrol@alertdavao.local']
+                );
+            } elseif ($hasRole) {
+                $allOfficersQuery->whereRaw(
+                    "LOWER(REPLACE(COALESCE(u.role::text, ''), ' ', '_')) = ? OR LOWER(COALESCE(u.email, '')) LIKE ?",
+                    ['patrol_officer', 'ps%.patrol@alertdavao.local']
+                );
+            } else {
+                $allOfficersQuery->whereRaw("LOWER(COALESCE(u.email, '')) LIKE ?", ['ps%.patrol@alertdavao.local']);
+            }
+
+            $allOfficers = $allOfficersQuery->get();
 
             $notifiedCount = 0;
             foreach ($allOfficers as $officer) {
