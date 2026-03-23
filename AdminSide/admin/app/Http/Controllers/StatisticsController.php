@@ -126,6 +126,8 @@ class StatisticsController extends Controller
         $crimeType = $request->input('crime_type');
         $month = $request->input('month');
         $year = $request->input('year');
+        $dateFrom = $request->input('date_from');
+        $dateTo = $request->input('date_to');
 
         try {
             // Ensure API is running
@@ -152,9 +154,11 @@ class StatisticsController extends Controller
                  $response['data'] = $apiResponse;
             }
 
-            // Always provide historical points aligned with active statistics filter
+            // Always provide historical points aligned with active statistics filter/date range
             try {
-                if (!empty($crimeType)) {
+                if ($dateFrom || $dateTo) {
+                    $response['historical'] = $this->getDateRangeMonthlyReports($dateFrom, $dateTo, $crimeType);
+                } elseif (!empty($crimeType)) {
                     $response['historical'] = $this->getCombinedHistoricalByCrimeType($crimeType, $month, $year);
                 } else {
                     $historical = $this->_getCrimeStats($month, $year);
@@ -164,13 +168,20 @@ class StatisticsController extends Controller
                 $response['historical'] = [];
             }
 
+            // If a specific crime type is selected but SARIMA API returns global forecast,
+            // scale forecast to that crime type using historical share.
+            $response = $this->applyCrimeTypeShareScaling($response, $crimeType, $month, $year);
+
+            // Dashboard date-range context (date_from/date_to)
+            $response = $this->applyDateRangeContextScaling($response, $dateFrom, $dateTo, $crimeType);
+
             // Make forecast context-aware when dashboard/statistics filters are active.
             $response = $this->applyFilterContextScaling($response, $month, $year, $crimeType);
 
             // Real-time online adjustment using fresh submitted reports.
             // This keeps forecasts responsive when new reports arrive between retraining windows.
             $response = $this->applyLiveReportAdjustment($response, $crimeType);
-            $response['filter'] = ['month' => $month, 'year' => $year];
+            $response['filter'] = ['month' => $month, 'year' => $year, 'date_from' => $dateFrom, 'date_to' => $dateTo];
             
             return response()->json($response);
         } catch (\Exception $e) {
@@ -356,6 +367,158 @@ class StatisticsController extends Controller
         }
 
         return $response;
+    }
+
+    private function applyCrimeTypeShareScaling(array $response, $crimeType = null, $month = null, $year = null): array
+    {
+        if (empty($crimeType) || !isset($response['data']) || !is_array($response['data']) || count($response['data']) === 0) {
+            return $response;
+        }
+
+        try {
+            $typeHistory = $this->getCombinedHistoricalByCrimeType($crimeType, $month, $year);
+            $typeAvg = collect($typeHistory)
+                ->pluck('count')
+                ->map(fn($v) => floatval($v))
+                ->filter(fn($v) => is_finite($v) && $v >= 0)
+                ->avg();
+
+            $allHistory = $this->_getCrimeStats($month, $year)['monthly'] ?? [];
+            $allAvg = collect($allHistory)
+                ->pluck('count')
+                ->map(fn($v) => floatval($v))
+                ->filter(fn($v) => is_finite($v) && $v > 0)
+                ->avg();
+
+            if (!$allAvg || $allAvg <= 0) {
+                return $response;
+            }
+
+            $ratio = ($typeAvg ?? 0) / $allAvg;
+            // keep realistic proportions so lines remain visible but distinctly per-crime
+            $ratio = max(0.02, min(0.95, $ratio));
+
+            $adjusted = [];
+            foreach ($response['data'] as $point) {
+                $forecast = floatval($point['forecast'] ?? 0);
+                $lower = floatval($point['lower_ci'] ?? $forecast);
+                $upper = floatval($point['upper_ci'] ?? $forecast);
+
+                $point['forecast'] = round(max(0, $forecast * $ratio), 2);
+                $point['lower_ci'] = round(max(0, $lower * $ratio), 2);
+                $point['upper_ci'] = round(max(0, $upper * $ratio), 2);
+                $adjusted[] = $point;
+            }
+
+            $response['data'] = $adjusted;
+            $response['crime_type_scaling'] = [
+                'applied' => true,
+                'crime_type' => $crimeType,
+                'ratio' => round($ratio, 4),
+            ];
+        } catch (\Throwable $e) {
+            // keep original response on any issue
+        }
+
+        return $response;
+    }
+
+    private function applyDateRangeContextScaling(array $response, $dateFrom = null, $dateTo = null, $crimeType = null): array
+    {
+        if ((!$dateFrom && !$dateTo) || !isset($response['data']) || !is_array($response['data']) || count($response['data']) === 0) {
+            return $response;
+        }
+
+        try {
+            $end = $dateTo ? Carbon::parse($dateTo)->endOfDay() : Carbon::now()->endOfDay();
+            $start = $dateFrom ? Carbon::parse($dateFrom)->startOfDay() : $end->copy()->subDays(29)->startOfDay();
+            if ($start->gt($end)) {
+                [$start, $end] = [$end->copy()->startOfDay(), $start->copy()->endOfDay()];
+            }
+
+            $days = max(1, $start->diffInDays($end) + 1);
+            $prevEnd = $start->copy()->subDay()->endOfDay();
+            $prevStart = $prevEnd->copy()->subDays($days - 1)->startOfDay();
+
+            $baseQuery = DB::table('reports')
+                ->where('is_valid', self::REPORT_VALID);
+
+            if (!empty($crimeType)) {
+                $baseQuery->whereRaw("UPPER(COALESCE(report_type::text, '')) LIKE ?", ['%' . strtoupper($crimeType) . '%']);
+            }
+
+            $currentCount = (clone $baseQuery)
+                ->whereBetween('created_at', [$start, $end])
+                ->count();
+
+            $prevCount = (clone $baseQuery)
+                ->whereBetween('created_at', [$prevStart, $prevEnd])
+                ->count();
+
+            $multiplier = $prevCount > 0 ? ($currentCount / $prevCount) : ($currentCount > 0 ? 1.2 : 1.0);
+            $multiplier = max(0.40, min(2.50, $multiplier));
+
+            $adjusted = [];
+            foreach ($response['data'] as $point) {
+                $forecast = floatval($point['forecast'] ?? 0);
+                $lower = floatval($point['lower_ci'] ?? $forecast);
+                $upper = floatval($point['upper_ci'] ?? $forecast);
+
+                $point['forecast'] = round(max(0, $forecast * $multiplier), 2);
+                $point['lower_ci'] = round(max(0, $lower * $multiplier), 2);
+                $point['upper_ci'] = round(max(0, $upper * $multiplier), 2);
+                $adjusted[] = $point;
+            }
+
+            $response['data'] = $adjusted;
+            $response['date_range_context'] = [
+                'applied' => true,
+                'from' => $start->toDateString(),
+                'to' => $end->toDateString(),
+                'current_count' => $currentCount,
+                'previous_count' => $prevCount,
+                'multiplier' => round($multiplier, 3),
+            ];
+        } catch (\Throwable $e) {
+            // keep original forecast if range scaling fails
+        }
+
+        return $response;
+    }
+
+    private function getDateRangeMonthlyReports($dateFrom = null, $dateTo = null, $crimeType = null): array
+    {
+        try {
+            $end = $dateTo ? Carbon::parse($dateTo)->endOfDay() : Carbon::now()->endOfDay();
+            $start = $dateFrom ? Carbon::parse($dateFrom)->startOfDay() : $end->copy()->subDays(29)->startOfDay();
+            if ($start->gt($end)) {
+                [$start, $end] = [$end->copy()->startOfDay(), $start->copy()->endOfDay()];
+            }
+
+            $q = DB::table('reports')
+                ->where('is_valid', self::REPORT_VALID)
+                ->whereBetween('created_at', [$start, $end]);
+
+            if (!empty($crimeType)) {
+                $q->whereRaw("UPPER(COALESCE(report_type::text, '')) LIKE ?", ['%' . strtoupper($crimeType) . '%']);
+            }
+
+            $rows = $q->selectRaw("to_char(created_at, 'YYYY-MM') as ym, COUNT(*) as c")
+                ->groupBy('ym')
+                ->orderBy('ym', 'asc')
+                ->get();
+
+            return collect($rows)->map(function ($row) {
+                [$y, $m] = explode('-', strval($row->ym));
+                return [
+                    'year' => intval($y),
+                    'month' => intval($m),
+                    'count' => intval($row->c),
+                ];
+            })->values()->all();
+        } catch (\Throwable $e) {
+            return [];
+        }
     }
 
     /**

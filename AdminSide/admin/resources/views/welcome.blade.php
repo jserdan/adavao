@@ -989,16 +989,9 @@
         const hasDashboardFilter = !!(dashboardDateFrom || dashboardDateTo);
         const targetMonth = String(dashboardDateTo || dashboardDateFrom || '').substring(0, 7);
 
-        // Apply dashboard date filter to AI insight context
-        // Use the latest selected month for strongest dashboard relevance.
-        if (dashboardDateFrom && dashboardDateTo) {
-            const toMonth = String(dashboardDateTo).substring(0, 7);
-            params.set('month', toMonth);
-        } else if (dashboardDateFrom) {
-            params.set('month', String(dashboardDateFrom).substring(0, 7));
-        } else if (dashboardDateTo) {
-            params.set('month', String(dashboardDateTo).substring(0, 7));
-        }
+        // Apply dashboard date range filter to AI insight context (exact dates).
+        if (dashboardDateFrom) params.set('date_from', String(dashboardDateFrom));
+        if (dashboardDateTo) params.set('date_to', String(dashboardDateTo));
 
         fetch('/api/statistics/forecast?' + params.toString())
             .then(response => response.json())
