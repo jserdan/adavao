@@ -11,30 +11,47 @@ use Illuminate\Support\Facades\Log;
 class PatrolOfficerSeeder extends Seeder
 {
     /**
-     * Seed test patrol officer accounts.
-     * Safe to re-run - handles existing records.
+     * Seed patrol officer accounts for all PS stations.
+     * Safe to re-run - updates existing records.
      */
     public function run(): void
     {
-        $this->command->info("🔄 Starting PatrolOfficerSeeder...");
-        
+        $this->command->info("Starting PatrolOfficerSeeder...");
+
         $password = Hash::make('patrol123');
-        
-        // Test patrol officer accounts
-        $patrolOfficers = [
-            [
-                'firstname' => 'Test',
+
+        $stations = DB::table('police_stations')
+            ->select('station_id', 'station_name')
+            ->where('station_name', 'LIKE', 'PS%')
+            ->get()
+            ->sortBy(function ($station) {
+                if (preg_match('/^PS\s*(\d+)/i', (string) $station->station_name, $matches)) {
+                    return (int) $matches[1];
+                }
+
+                return PHP_INT_MAX;
+            })
+            ->values();
+
+        if ($stations->isEmpty()) {
+            $this->command->warn('No PS stations found. Skipping patrol account seeding.');
+            return;
+        }
+
+        $patrolOfficers = [];
+        foreach ($stations as $index => $station) {
+            preg_match('/^PS\s*(\d+)/i', (string) $station->station_name, $matches);
+            $psNumber = isset($matches[1]) ? (int) $matches[1] : ($index + 1);
+            $psCode = str_pad((string) $psNumber, 2, '0', STR_PAD_LEFT);
+
+            $patrolOfficers[] = [
+                'firstname' => 'PS' . $psNumber,
                 'lastname' => 'Patrol',
-                'email' => 'tpatrol@mailsac.com',
-                'contact' => '+639123456789',
-            ],
-            [
-                'firstname' => 'Patrol',
-                'lastname' => 'Officer1',
-                'email' => 'patrol1@mailsac.com',
-                'contact' => '+639123456790',
-            ],
-        ];
+                'email' => 'ps' . $psCode . '.patrol@alertdavao.local',
+                'contact' => '+6399000' . str_pad((string) $psNumber, 4, '0', STR_PAD_LEFT),
+                'assigned_station_id' => $station->station_id,
+            ];
+        }
 
         foreach ($patrolOfficers as $officer) {
             // Insert into user_admin
@@ -59,9 +76,12 @@ class PatrolOfficerSeeder extends Seeder
                     if (Schema::hasColumn('user_admin', 'email_verified_at')) {
                         $data['email_verified_at'] = now();
                     }
+                    if (Schema::hasColumn('user_admin', 'assigned_station_id')) {
+                        $data['assigned_station_id'] = $officer['assigned_station_id'];
+                    }
                     
                     DB::table('user_admin')->insert($data);
-                    $this->command->info("✅ Created user_admin: {$officer['email']}");
+                    $this->command->info("Created user_admin: {$officer['email']}");
                 } else {
                     // Update existing
                     $update = ['updated_at' => now()];
@@ -71,11 +91,14 @@ class PatrolOfficerSeeder extends Seeder
                     if (Schema::hasColumn('user_admin', 'email_verified_at')) {
                         $update['email_verified_at'] = now();
                     }
+                    if (Schema::hasColumn('user_admin', 'assigned_station_id')) {
+                        $update['assigned_station_id'] = $officer['assigned_station_id'];
+                    }
                     DB::table('user_admin')->where('email', $officer['email'])->update($update);
-                    $this->command->info("🔄 Updated user_admin: {$officer['email']}");
+                    $this->command->info("Updated user_admin: {$officer['email']}");
                 }
             } catch (\Exception $e) {
-                $this->command->error("❌ user_admin error for {$officer['email']}: " . $e->getMessage());
+                $this->command->error("user_admin error for {$officer['email']}: " . $e->getMessage());
                 Log::error("PatrolOfficerSeeder user_admin error: " . $e->getMessage());
             }
 
@@ -104,12 +127,15 @@ class PatrolOfficerSeeder extends Seeder
                     if (Schema::hasColumn('users_public', 'is_on_duty')) {
                         $dataPublic['is_on_duty'] = false;
                     }
+                    if (Schema::hasColumn('users_public', 'assigned_station_id')) {
+                        $dataPublic['assigned_station_id'] = $officer['assigned_station_id'];
+                    }
                     if (Schema::hasColumn('users_public', 'email_verified_at')) {
                         $dataPublic['email_verified_at'] = now();
                     }
                     
                     DB::table('users_public')->insert($dataPublic);
-                    $this->command->info("✅ Created users_public: {$officer['email']}");
+                    $this->command->info("Created users_public: {$officer['email']}");
                 } else {
                     // Update existing
                     $updatePublic = ['updated_at' => now()];
@@ -119,19 +145,25 @@ class PatrolOfficerSeeder extends Seeder
                     if (Schema::hasColumn('users_public', 'role')) {
                         $updatePublic['role'] = 'patrol_officer';
                     }
+                    if (Schema::hasColumn('users_public', 'is_on_duty')) {
+                        $updatePublic['is_on_duty'] = false;
+                    }
+                    if (Schema::hasColumn('users_public', 'assigned_station_id')) {
+                        $updatePublic['assigned_station_id'] = $officer['assigned_station_id'];
+                    }
                     if (Schema::hasColumn('users_public', 'email_verified_at')) {
                         $updatePublic['email_verified_at'] = now();
                     }
                     DB::table('users_public')->where('email', $officer['email'])->update($updatePublic);
-                    $this->command->info("🔄 Updated users_public: {$officer['email']}");
+                    $this->command->info("Updated users_public: {$officer['email']}");
                 }
             } catch (\Exception $e) {
-                $this->command->error("❌ users_public error for {$officer['email']}: " . $e->getMessage());
+                $this->command->error("users_public error for {$officer['email']}: " . $e->getMessage());
                 Log::error("PatrolOfficerSeeder users_public error: " . $e->getMessage());
             }
         }
-        
-        $this->command->info("✅ PatrolOfficerSeeder completed!");
+
+        $this->command->info('PatrolOfficerSeeder completed.');
     }
 }
 

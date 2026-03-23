@@ -2572,8 +2572,7 @@ function drawFooter(pdf, pageWidth, pageHeight, margin) {
                             const option = document.createElement('option');
                             option.value = officer.id;
                             const locationText = officer.station_name ? ` (${officer.station_name})` : '';
-                            const dutyStatus = officer.is_on_duty ? ' 🟢 Online' : ' ⚫ Offline';
-                            option.textContent = officer.name + dutyStatus + locationText;
+                            option.textContent = officer.name + locationText;
                             selectElement.appendChild(option);
                         });
                         selectElement.disabled = false;
@@ -4854,8 +4853,7 @@ function generatePDF(report) {
                         const option = document.createElement('option');
                         option.value = officer.id;
                         const locationText = officer.station_name ? ` (${officer.station_name})` : '';
-                        const dutyStatus = officer.is_on_duty ? ' (Online)' : ' (Offline)';
-                        option.textContent = officer.name + dutyStatus + locationText;
+                        option.textContent = officer.name + locationText;
                         selectElement.appendChild(option);
                     });
                     selectElement.disabled = false;

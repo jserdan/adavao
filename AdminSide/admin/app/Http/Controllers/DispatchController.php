@@ -90,13 +90,12 @@ class DispatchController extends Controller
             'avg_response_time' => $this->getAverageResponseTime(),
         ];
 
-        // Get available officers
-                $officers = User::whereRaw("LOWER(COALESCE(user_role::text, role::text, '')) = ?", ['patrol_officer'])
-                        ->where('is_on_duty', true)
-                        ->whereDoesntHave('patrolDispatches', function($q) {
-                            $q->whereIn('status', ['pending', 'accepted', 'en_route', 'arrived']);
-                        })
-                        ->get();
+        // Get available officers regardless of on-duty flag.
+        $officers = User::whereRaw("LOWER(COALESCE(user_role::text, role::text, '')) = ?", ['patrol_officer'])
+            ->whereDoesntHave('patrolDispatches', function($q) {
+                $q->whereIn('status', ['pending', 'accepted', 'en_route', 'arrived']);
+            })
+            ->get();
 
         $stations = PoliceStation::all();
 
@@ -360,7 +359,7 @@ class DispatchController extends Controller
     }
 
     /**
-     * Get on-duty patrol officers
+     * Get patrol officers for dispatch assignment.
      */
     public function getOnDutyOfficers()
     {
@@ -377,13 +376,12 @@ class DispatchController extends Controller
             CASE 
                 WHEN pl.updated_at > NOW() - INTERVAL '10 minutes' THEN true 
                 ELSE false 
-            END as has_recent_location,
-            u.is_on_duty
+            END as has_recent_location
         FROM users_public u
         LEFT JOIN police_stations ps ON u.assigned_station_id = ps.station_id
         LEFT JOIN patrol_locations pl ON u.id = pl.user_id
         WHERE LOWER(COALESCE(u.user_role::text, u.role::text, '')) = 'patrol_officer'
-        ORDER BY u.is_on_duty DESC, pl.updated_at DESC NULLS LAST
+        ORDER BY pl.updated_at DESC NULLS LAST, u.lastname ASC, u.firstname ASC
     ");
 
         return response()->json(['officers' => $officers]);
