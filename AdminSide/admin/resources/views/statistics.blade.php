@@ -1389,10 +1389,14 @@ function renderForecastBreakdown() {
     const totalMonths = monthlyData.length || 1;
     const historicalAvgPerMonth = monthlyData.reduce((s, d) => s + (parseInt(d.count) || 0), 0) / totalMonths;
 
+    const selectedCrime = crimeTypeFilter ? String(crimeTypeFilter).toUpperCase() : '';
+    const singleCrimeMode = !!selectedCrime;
+
     // Build per-crime breakdown
     let crimes = crimeStats.byType.map(d => {
+        const typeName = String(d.type || '').toUpperCase();
         const pct = (parseInt(d.count) || 0) / totalHistorical;
-        const projectedTotal = totalForecast * pct;
+        const projectedTotal = (singleCrimeMode && typeName === selectedCrime) ? totalForecast : (totalForecast * pct);
         const projectedAvg = projectedTotal / horizonMonths;
         const historicalAvg = (parseInt(d.count) || 0) / totalMonths;
         const changePct = historicalAvg > 0 ? ((projectedAvg - historicalAvg) / historicalAvg * 100) : 0;
@@ -1517,7 +1521,6 @@ async function loadForecast(silent = false) {
     
     try {
         let url = `/api/statistics/forecast?horizon=${horizon}`;
-        if (crimeType) url += `&crime_type=${encodeURIComponent(crimeType)}`;
         if (currentFilter.month) url += `&month=${encodeURIComponent(currentFilter.month)}`;
         else if (currentFilter.year) url += `&year=${encodeURIComponent(currentFilter.year)}`;
         
@@ -1525,7 +1528,11 @@ async function loadForecast(silent = false) {
         const data = await response.json();
         
         if (data.status === 'success' && data.data) {
-            forecastData = data.data;
+            let forecastSeries = Array.isArray(data.data) ? data.data : [];
+            if (crimeType) {
+                forecastSeries = scaleForecastSeriesByCrimeType(forecastSeries, crimeType);
+            }
+            forecastData = forecastSeries;
             
             // Update API status
             statusDot.className = 'status-dot online';
@@ -1533,9 +1540,9 @@ async function loadForecast(silent = false) {
             
             // Show forecast info
             infoBox.style.display = 'block';
-            const firstDate = data.data[0]?.date?.substring(0, 7) || 'N/A';
-            const lastDate = data.data[data.data.length - 1]?.date?.substring(0, 7) || 'N/A';
-            const avgForecast = (data.data.reduce((sum, d) => sum + parseFloat(d.forecast || 0), 0) / data.data.length).toFixed(1);
+            const firstDate = forecastSeries[0]?.date?.substring(0, 7) || 'N/A';
+            const lastDate = forecastSeries[forecastSeries.length - 1]?.date?.substring(0, 7) || 'N/A';
+            const avgForecast = (forecastSeries.reduce((sum, d) => sum + parseFloat(d.forecast || 0), 0) / (forecastSeries.length || 1)).toFixed(1);
             
             document.getElementById('forecastInfoText').innerHTML = 
                 `Period: ${firstDate} to ${lastDate} | Scope: ${crimeType || 'All Crimes'} | Historical Window: Last ${horizon} month(s) | Avg Predicted: ${avgForecast}/month | Model: SARIMA(0,1,1)(0,1,1)[12]`;
@@ -1553,7 +1560,7 @@ async function loadForecast(silent = false) {
             }
             historicalData = filterHistoricalByMonthsBack(historicalData, parseInt(horizon, 10));
 
-            renderTrendChart(historicalData, data.data);
+            renderTrendChart(historicalData, forecastSeries);
             renderForecastBreakdown();
         } else {
             throw new Error(data.message || 'Invalid forecast data');
@@ -1599,6 +1606,33 @@ function filterHistoricalByMonthsBack(historicalData, monthsBack) {
         if (!Number.isFinite(year) || !Number.isFinite(month)) return false;
         const pointDate = new Date(year, month - 1, 1);
         return pointDate >= cutoff;
+    });
+}
+
+function getCrimeTypeShare(crimeType) {
+    if (!crimeType || !crimeStats?.byType?.length) return 1;
+    const normalized = String(crimeType).toUpperCase();
+    const total = crimeStats.byType.reduce((sum, d) => sum + (parseFloat(d.count) || 0), 0);
+    if (!total) return 0;
+    const selected = crimeStats.byType
+        .filter(d => String(d.type || '').toUpperCase() === normalized)
+        .reduce((sum, d) => sum + (parseFloat(d.count) || 0), 0);
+    return selected / total;
+}
+
+function scaleForecastSeriesByCrimeType(series, crimeType) {
+    if (!Array.isArray(series) || !series.length || !crimeType) return series || [];
+    const share = Math.max(0, Math.min(1, getCrimeTypeShare(crimeType)));
+    return series.map(point => {
+        const forecast = parseFloat(point?.forecast || 0);
+        const lower = parseFloat(point?.lower_ci || forecast);
+        const upper = parseFloat(point?.upper_ci || forecast);
+        return {
+            ...point,
+            forecast: Math.max(0, +(forecast * share).toFixed(2)),
+            lower_ci: Math.max(0, +(lower * share).toFixed(2)),
+            upper_ci: Math.max(0, +(upper * share).toFixed(2))
+        };
     });
 }
 
