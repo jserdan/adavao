@@ -367,29 +367,61 @@ class DispatchController extends Controller
     {
         $this->ensureSeededPatrolAccounts();
 
-        // Use raw SQL to join with patrol_locations for better accuracy
-        $officers = DB::select("
-            SELECT 
-                u.id,
-                CONCAT(u.firstname, ' ', u.lastname) as name,
-                u.push_token,
-                ps.station_name,
-                pl.latitude,
-                pl.longitude,
-                pl.updated_at as location_updated_at,
-            CASE 
-                WHEN pl.updated_at > NOW() - INTERVAL '10 minutes' THEN true 
-                ELSE false 
-            END as has_recent_location
-        FROM users_public u
-        LEFT JOIN police_stations ps ON u.assigned_station_id = ps.station_id
-        LEFT JOIN patrol_locations pl ON u.id = pl.user_id
-        WHERE (
-            LOWER(REPLACE(COALESCE(u.user_role::text, u.role::text, ''), ' ', '_')) = 'patrol_officer'
-            OR LOWER(COALESCE(u.email, '')) LIKE 'ps%.patrol@alertdavao.local'
-        )
-        ORDER BY pl.updated_at DESC NULLS LAST, u.lastname ASC, u.firstname ASC
-    ");
+        $hasUserRole = Schema::hasColumn('users_public', 'user_role');
+        $hasRole = Schema::hasColumn('users_public', 'role');
+        $hasPushToken = Schema::hasColumn('users_public', 'push_token');
+        $hasAssignedStation = Schema::hasColumn('users_public', 'assigned_station_id');
+        $hasPatrolLocationsTable = Schema::hasTable('patrol_locations');
+
+        $query = DB::table('users_public as u');
+
+        if ($hasAssignedStation) {
+            $query->leftJoin('police_stations as ps', 'u.assigned_station_id', '=', 'ps.station_id');
+        }
+
+        if ($hasPatrolLocationsTable) {
+            $query->leftJoin('patrol_locations as pl', 'u.id', '=', 'pl.user_id');
+        }
+
+        $query->select([
+            'u.id',
+            DB::raw("TRIM(COALESCE(u.firstname, '') || ' ' || COALESCE(u.lastname, '')) as name"),
+            DB::raw($hasPushToken ? 'u.push_token as push_token' : 'NULL as push_token'),
+            DB::raw($hasAssignedStation ? 'ps.station_name as station_name' : 'NULL as station_name'),
+            DB::raw($hasPatrolLocationsTable ? 'pl.latitude as latitude' : 'NULL as latitude'),
+            DB::raw($hasPatrolLocationsTable ? 'pl.longitude as longitude' : 'NULL as longitude'),
+            DB::raw($hasPatrolLocationsTable ? 'pl.updated_at as location_updated_at' : 'NULL as location_updated_at'),
+            DB::raw(
+                $hasPatrolLocationsTable
+                    ? "CASE WHEN pl.updated_at > NOW() - INTERVAL '10 minutes' THEN true ELSE false END as has_recent_location"
+                    : 'false as has_recent_location'
+            ),
+        ]);
+
+        if ($hasUserRole && $hasRole) {
+            $query->whereRaw(
+                "LOWER(REPLACE(COALESCE(u.user_role::text, u.role::text, ''), ' ', '_')) = ? OR LOWER(COALESCE(u.email, '')) LIKE ?",
+                ['patrol_officer', 'ps%.patrol@alertdavao.local']
+            );
+        } elseif ($hasUserRole) {
+            $query->whereRaw(
+                "LOWER(REPLACE(COALESCE(u.user_role::text, ''), ' ', '_')) = ? OR LOWER(COALESCE(u.email, '')) LIKE ?",
+                ['patrol_officer', 'ps%.patrol@alertdavao.local']
+            );
+        } elseif ($hasRole) {
+            $query->whereRaw(
+                "LOWER(REPLACE(COALESCE(u.role::text, ''), ' ', '_')) = ? OR LOWER(COALESCE(u.email, '')) LIKE ?",
+                ['patrol_officer', 'ps%.patrol@alertdavao.local']
+            );
+        } else {
+            $query->whereRaw("LOWER(COALESCE(u.email, '')) LIKE ?", ['ps%.patrol@alertdavao.local']);
+        }
+
+        if ($hasPatrolLocationsTable) {
+            $query->orderByRaw('pl.updated_at DESC NULLS LAST');
+        }
+
+        $officers = $query->orderBy('u.lastname')->orderBy('u.firstname')->get();
 
         return response()->json(['officers' => $officers]);
     }
