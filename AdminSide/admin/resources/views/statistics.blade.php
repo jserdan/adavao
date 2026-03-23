@@ -652,10 +652,10 @@
                     <option value="VANDALISM">Vandalism</option>
                 </select>
                 <select class="filter-select" id="forecastHorizon">
-                    <option value="6">6 Month Forecast</option>
-                    <option value="12" selected>12 Month Forecast</option>
-                    <option value="18">18 Month Forecast</option>
-                    <option value="24">24 Month Forecast</option>
+                    <option value="6">Historical Data + 6 Month Forecast</option>
+                    <option value="12" selected>Historical Data + 12 Month Forecast</option>
+                    <option value="18">Historical Data + 18 Month Forecast</option>
+                    <option value="24">Historical Data + 24 Month Forecast</option>
                 </select>
                 <button class="btn btn-secondary" id="refreshForecast">🔄 Refresh</button>
             </div>
@@ -1538,7 +1538,7 @@ async function loadForecast(silent = false) {
             const avgForecast = (data.data.reduce((sum, d) => sum + parseFloat(d.forecast || 0), 0) / data.data.length).toFixed(1);
             
             document.getElementById('forecastInfoText').innerHTML = 
-                `Period: ${firstDate} to ${lastDate} | Scope: ${crimeType || 'All Crimes'} | Avg Predicted: ${avgForecast}/month | Model: SARIMA(0,1,1)(0,1,1)[12]`;
+                `Period: ${firstDate} to ${lastDate} | Scope: ${crimeType || 'All Crimes'} | Historical Window: Last ${horizon} month(s) | Avg Predicted: ${avgForecast}/month | Model: SARIMA(0,1,1)(0,1,1)[12]`;
             
             // Restore canvas only when not in silent refresh mode
             if (!silent) {
@@ -1551,6 +1551,7 @@ async function loadForecast(silent = false) {
             } else if (currentFilter.year) {
                 historicalData = historicalData.filter(d => String(d.year) === String(currentFilter.year));
             }
+            historicalData = filterHistoricalByMonthsBack(historicalData, parseInt(horizon, 10));
 
             renderTrendChart(historicalData, data.data);
             renderForecastBreakdown();
@@ -1574,6 +1575,7 @@ async function loadForecast(silent = false) {
             } else if (currentFilter.year) {
                 fallbackHistory = fallbackHistory.filter(d => String(d.year) === String(currentFilter.year));
             }
+            fallbackHistory = filterHistoricalByMonthsBack(fallbackHistory, parseInt(horizon, 10));
             renderTrendChart(fallbackHistory, []);
         } else {
             if (!silent) {
@@ -1581,6 +1583,23 @@ async function loadForecast(silent = false) {
             }
         }
     }
+}
+
+function filterHistoricalByMonthsBack(historicalData, monthsBack) {
+    if (!Array.isArray(historicalData) || historicalData.length === 0) return [];
+    const safeMonthsBack = Number.isFinite(monthsBack) && monthsBack > 0 ? monthsBack : 6;
+
+    const cutoff = new Date();
+    cutoff.setDate(1);
+    cutoff.setMonth(cutoff.getMonth() - safeMonthsBack);
+
+    return historicalData.filter(d => {
+        const year = parseInt(d.year, 10);
+        const month = parseInt(d.month, 10);
+        if (!Number.isFinite(year) || !Number.isFinite(month)) return false;
+        const pointDate = new Date(year, month - 1, 1);
+        return pointDate >= cutoff;
+    });
 }
 
 // Render Trend Chart

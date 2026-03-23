@@ -986,17 +986,14 @@
     function fetchForecast() {
         // Fetch forecast for next 1 month
         const params = new URLSearchParams({ horizon: '1' });
+        const hasDashboardFilter = !!(dashboardDateFrom || dashboardDateTo);
+        const targetMonth = String(dashboardDateTo || dashboardDateFrom || '').substring(0, 7);
 
         // Apply dashboard date filter to AI insight context
-        // If both dates are in one month, use month filter; else use year from the "from" date.
+        // Use the latest selected month for strongest dashboard relevance.
         if (dashboardDateFrom && dashboardDateTo) {
-            const fromMonth = String(dashboardDateFrom).substring(0, 7);
             const toMonth = String(dashboardDateTo).substring(0, 7);
-            if (fromMonth === toMonth) {
-                params.set('month', fromMonth);
-            } else {
-                params.set('year', String(dashboardDateFrom).substring(0, 4));
-            }
+            params.set('month', toMonth);
         } else if (dashboardDateFrom) {
             params.set('month', String(dashboardDateFrom).substring(0, 7));
         } else if (dashboardDateTo) {
@@ -1016,9 +1013,14 @@
                 if(data.status === 'success' && data.data) {
                     // SARIMA API returns data as array of ForecastItem objects:
                     // [{date, forecast, lower_ci, upper_ci}, ...]
+                    const forecastPoints = Array.isArray(data.data) ? data.data : [];
                     let rawValue = 0;
                     if (Array.isArray(data.data) && data.data.length > 0) {
-                        const item = data.data[0];
+                        let item = data.data[0];
+                        if (targetMonth) {
+                            const matched = forecastPoints.find(p => String(p?.date || '').substring(0, 7) === targetMonth);
+                            if (matched) item = matched;
+                        }
                         // Extract forecast value from the ForecastItem object
                         if (typeof item === 'object' && item !== null && item.forecast !== undefined) {
                             rawValue = item.forecast;
@@ -1031,7 +1033,19 @@
                         rawValue = data.data;
                     }
 
-                    const predictedValue = Math.round(parseFloat(rawValue));
+                    let predictedValue = Math.round(parseFloat(rawValue));
+
+                    // Make AI highlight responsive to dashboard date filter using filtered historical context.
+                    // Blend model forecast with filtered historical average when a dashboard filter is active.
+                    if (hasDashboardFilter && Array.isArray(data.historical) && data.historical.length > 0) {
+                        const histValues = data.historical
+                            .map(h => parseFloat(h?.count ?? h?.value ?? 0))
+                            .filter(v => Number.isFinite(v));
+                        if (histValues.length > 0 && Number.isFinite(predictedValue)) {
+                            const histAvg = histValues.reduce((a, b) => a + b, 0) / histValues.length;
+                            predictedValue = Math.round((predictedValue * 0.6) + (histAvg * 0.4));
+                        }
+                    }
                     
                     if(isNaN(predictedValue)) {
                         console.error('Forecast value is NaN. Raw:', rawValue, 'Data:', data);
@@ -1058,6 +1072,9 @@
                             } else {
                                 recommendation = 'NORMAL: Maintain standard beat patrols. Focus on community engagement and intelligence gathering.';
                             }
+                        }
+                        if (hasDashboardFilter) {
+                            recommendation = `[Filtered Context] ${recommendation}`;
                         }
                         recEl.innerText = recommendation;
                     }
