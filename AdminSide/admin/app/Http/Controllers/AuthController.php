@@ -450,8 +450,11 @@ class AuthController extends Controller
         
         Auth::login($userAdmin);
         $request->session()->regenerate();
-        
-        return redirect()->intended('dashboard');
+
+        // Prevent stale intended URLs (e.g. /dashboard) from previous sessions/account switches.
+        $request->session()->forget('url.intended');
+
+        return redirect()->route('dashboard');
     }
 
     // Helper to initiate OTP flow (used by Login and Google Auth)
@@ -628,6 +631,7 @@ class AuthController extends Controller
         // Finalize Login
         Auth::guard('admin')->login($userAdmin, false); // No "remember me" for OTP flow for simplicity
         $request->session()->regenerate();
+        $request->session()->forget('url.intended');
         
         // Sync stats
         $userAdmin->failed_login_attempts = 0;
@@ -637,7 +641,7 @@ class AuthController extends Controller
         // Log
         \Log::info("Admin logged in via OTP: {$userAdmin->email}");
 
-        return redirect()->intended(route('dashboard'));
+        return redirect()->route('dashboard');
     }
 
     // Resend OTP
@@ -712,6 +716,7 @@ class AuthController extends Controller
 
         // Perform logout and session cleanup
         Auth::guard('admin')->logout();
+        $request->session()->forget('url.intended');
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
