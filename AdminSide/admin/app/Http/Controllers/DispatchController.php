@@ -371,16 +371,10 @@ class DispatchController extends Controller
         $hasRole = Schema::hasColumn('users_public', 'role');
         $hasPushToken = Schema::hasColumn('users_public', 'push_token');
         $hasAssignedStation = Schema::hasColumn('users_public', 'assigned_station_id');
-        $hasPatrolLocationsTable = Schema::hasTable('patrol_locations');
-
         $query = DB::table('users_public as u');
 
         if ($hasAssignedStation) {
             $query->leftJoin('police_stations as ps', 'u.assigned_station_id', '=', 'ps.station_id');
-        }
-
-        if ($hasPatrolLocationsTable) {
-            $query->leftJoin('patrol_locations as pl', 'u.id', '=', 'pl.user_id');
         }
 
         $query->select([
@@ -388,14 +382,10 @@ class DispatchController extends Controller
             DB::raw("TRIM(COALESCE(u.firstname, '') || ' ' || COALESCE(u.lastname, '')) as name"),
             DB::raw($hasPushToken ? 'u.push_token as push_token' : 'NULL as push_token'),
             DB::raw($hasAssignedStation ? 'ps.station_name as station_name' : 'NULL as station_name'),
-            DB::raw($hasPatrolLocationsTable ? 'pl.latitude as latitude' : 'NULL as latitude'),
-            DB::raw($hasPatrolLocationsTable ? 'pl.longitude as longitude' : 'NULL as longitude'),
-            DB::raw($hasPatrolLocationsTable ? 'pl.updated_at as location_updated_at' : 'NULL as location_updated_at'),
-            DB::raw(
-                $hasPatrolLocationsTable
-                    ? "CASE WHEN pl.updated_at > NOW() - INTERVAL '10 minutes' THEN true ELSE false END as has_recent_location"
-                    : 'false as has_recent_location'
-            ),
+            DB::raw('NULL as latitude'),
+            DB::raw('NULL as longitude'),
+            DB::raw('NULL as location_updated_at'),
+            DB::raw('false as has_recent_location'),
         ]);
 
         if ($hasUserRole && $hasRole) {
@@ -417,8 +407,8 @@ class DispatchController extends Controller
             $query->whereRaw("LOWER(COALESCE(u.email, '')) LIKE ?", ['ps%.patrol@alertdavao.local']);
         }
 
-        if ($hasPatrolLocationsTable) {
-            $query->orderByRaw('pl.updated_at DESC NULLS LAST');
+        if ($hasAssignedStation) {
+            $query->orderBy('u.assigned_station_id');
         }
 
         $officers = $query->orderBy('u.lastname')->orderBy('u.firstname')->get();
@@ -441,6 +431,26 @@ class DispatchController extends Controller
             ->whereRaw("LOWER(COALESCE(station_name, '')) NOT LIKE ?", ['%cybercrime%'])
             ->orderBy('station_id')
             ->get();
+
+        if ($stations->isEmpty()) {
+            return;
+        }
+
+        $expectedCount = $stations->count();
+        $existingSeededCount = DB::table('users_public')
+            ->whereRaw("LOWER(COALESCE(email, '')) LIKE ?", ['ps%.patrol@alertdavao.local'])
+            ->count();
+
+        // Fast path: all seeded patrol accounts already exist.
+        if ($existingSeededCount >= $expectedCount) {
+            return;
+        }
+
+        $existingEmails = DB::table('users_public')
+            ->whereRaw("LOWER(COALESCE(email, '')) LIKE ?", ['ps%.patrol@alertdavao.local'])
+            ->pluck('email')
+            ->map(fn ($email) => strtolower((string) $email))
+            ->flip();
 
         foreach ($stations as $station) {
             $psNumber = null;
@@ -466,29 +476,17 @@ class DispatchController extends Controller
                 'updated_at' => now(),
             ];
 
-            $updateData = [
-                'firstname' => 'PS' . $psNumber,
-                'lastname' => 'Patrol',
-                'updated_at' => now(),
-            ];
-
             if (Schema::hasColumn('users_public', 'is_on_duty')) {
                 $insertData['is_on_duty'] = false;
-                $updateData['is_on_duty'] = false;
             }
             if (Schema::hasColumn('users_public', 'assigned_station_id')) {
                 $insertData['assigned_station_id'] = $station->station_id;
-                $updateData['assigned_station_id'] = $station->station_id;
             }
             if (Schema::hasColumn('users_public', 'email_verified_at')) {
                 $insertData['email_verified_at'] = now();
-                $updateData['email_verified_at'] = now();
             }
 
-            $exists = DB::table('users_public')->where('email', $email)->exists();
-            if ($exists) {
-                DB::table('users_public')->where('email', $email)->update($updateData);
-            } else {
+            if (!$existingEmails->has(strtolower($email))) {
                 DB::table('users_public')->insert($insertData);
             }
         }
