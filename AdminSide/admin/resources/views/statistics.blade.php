@@ -894,6 +894,8 @@ let crimeStats = null;
 let forecastData = null;
 let currentFilter = { month: '', year: '' };
 let insightsData = null;
+let statsRefreshTimer = null;
+let statsRefreshInFlight = false;
 
 // Utility functions
 function escapeHtml(str) {
@@ -946,6 +948,32 @@ function attachEventListeners() {
     document.getElementById('riskMonthsFilter').addEventListener('change', loadBarangayRisk);
     document.getElementById('refreshWarning').addEventListener('click', loadMonthlyWarning);
     document.getElementById('breakdownSortFilter').addEventListener('change', renderForecastBreakdown);
+
+    // Live backend refresh signal (silent, no loading overlays)
+    window.addEventListener('adminLiveUpdate', () => scheduleStatsRefresh(1200));
+}
+
+function scheduleStatsRefresh(delayMs = 1000) {
+    if (document.visibilityState !== 'visible') return;
+    if (statsRefreshTimer) clearTimeout(statsRefreshTimer);
+
+    statsRefreshTimer = setTimeout(async () => {
+        if (statsRefreshInFlight) return;
+        statsRefreshInFlight = true;
+        try {
+            await loadCrimeStats();
+            await loadForecast(true);
+            await Promise.all([
+                loadInsights(),
+                loadForecastInsights(),
+                loadBarangayRisk()
+            ]);
+        } catch (e) {
+            console.warn('Silent stats refresh skipped:', e?.message || e);
+        } finally {
+            statsRefreshInFlight = false;
+        }
+    }, delayMs);
 }
 
 function applyFilter() {
@@ -966,6 +994,7 @@ function applyFilter() {
     }
     
     loadCrimeStats();
+    loadForecast();
     loadInsights();
     loadForecastInsights();
 }
@@ -976,6 +1005,7 @@ function clearFilter() {
     currentFilter = { month: '', year: '' };
     document.getElementById('filterStatus').textContent = 'Showing: All data';
     loadCrimeStats();
+    loadForecast();
     loadInsights();
     loadForecastInsights();
 }
@@ -1108,13 +1138,14 @@ async function loadForecastInsights() {
 
     try {
         const params = new URLSearchParams();
+        const horizon = document.getElementById('forecastHorizon').value || '6';
         if (currentFilter.month) params.append('month', currentFilter.month);
         else if (currentFilter.year) params.append('year', currentFilter.year);
         const qs = params.toString() ? '?' + params : '';
 
         const [insightsRes, forecastRes, riskRes] = await Promise.all([
             fetch('/api/statistics/insights' + qs),
-            fetch('/api/statistics/forecast?horizon=6'),
+            fetch('/api/statistics/forecast?horizon=' + encodeURIComponent(horizon) + (qs ? '&' + params.toString() : '')),
             fetch('/api/statistics/barangay-risk?months=3')
         ]);
 
@@ -1467,7 +1498,7 @@ function renderForecastBreakdown() {
 }
 
 // Load SARIMA Forecast
-async function loadForecast() {
+async function loadForecast(silent = false) {
     const horizon = document.getElementById('forecastHorizon').value;
     const crimeType = document.getElementById('crimeTypeFilter').value;
     const container = document.getElementById('trendChartContainer');
@@ -1476,15 +1507,19 @@ async function loadForecast() {
     const statusText = document.getElementById('apiStatusText');
     
     // Show loading
-    if (trendChart) {
-        trendChart.destroy();
-        trendChart = null;
+    if (!silent) {
+        if (trendChart) {
+            trendChart.destroy();
+            trendChart = null;
+        }
+        container.innerHTML = '<div class="loading-spinner"><div class="spinner"></div></div><canvas id="trendChart" style="display:none;"></canvas>';
     }
-    container.innerHTML = '<div class="loading-spinner"><div class="spinner"></div></div><canvas id="trendChart" style="display:none;"></canvas>';
     
     try {
         let url = `/api/statistics/forecast?horizon=${horizon}`;
         if (crimeType) url += `&crime_type=${encodeURIComponent(crimeType)}`;
+        if (currentFilter.month) url += `&month=${encodeURIComponent(currentFilter.month)}`;
+        else if (currentFilter.year) url += `&year=${encodeURIComponent(currentFilter.year)}`;
         
         const response = await fetch(url);
         const data = await response.json();
@@ -1505,10 +1540,18 @@ async function loadForecast() {
             document.getElementById('forecastInfoText').innerHTML = 
                 `Period: ${firstDate} to ${lastDate} | Scope: ${crimeType || 'All Crimes'} | Avg Predicted: ${avgForecast}/month | Model: SARIMA(0,1,1)(0,1,1)[12]`;
             
-            // Restore canvas
-            container.innerHTML = '<canvas id="trendChart"></canvas>';
+            // Restore canvas only when not in silent refresh mode
+            if (!silent) {
+                container.innerHTML = '<canvas id="trendChart"></canvas>';
+            }
             
-            const historicalData = data.historical?.length > 0 ? data.historical : (crimeStats?.monthly || []);
+            let historicalData = data.historical?.length > 0 ? data.historical : (crimeStats?.monthly || []);
+            if (currentFilter.month) {
+                historicalData = historicalData.filter(d => `${d.year}-${String(d.month).padStart(2, '0')}` === currentFilter.month);
+            } else if (currentFilter.year) {
+                historicalData = historicalData.filter(d => String(d.year) === String(currentFilter.year));
+            }
+
             renderTrendChart(historicalData, data.data);
             renderForecastBreakdown();
         } else {
@@ -1520,12 +1563,22 @@ async function loadForecast() {
         statusText.textContent = 'SARIMA API Offline';
         infoBox.style.display = 'none';
         renderForecastBreakdown();
-        
-        container.innerHTML = '<canvas id="trendChart"></canvas>';
+
+        if (!silent) {
+            container.innerHTML = '<canvas id="trendChart"></canvas>';
+        }
         if (crimeStats?.monthly?.length > 0) {
-            renderTrendChart(crimeStats.monthly, []);
+            let fallbackHistory = crimeStats.monthly;
+            if (currentFilter.month) {
+                fallbackHistory = fallbackHistory.filter(d => `${d.year}-${String(d.month).padStart(2, '0')}` === currentFilter.month);
+            } else if (currentFilter.year) {
+                fallbackHistory = fallbackHistory.filter(d => String(d.year) === String(currentFilter.year));
+            }
+            renderTrendChart(fallbackHistory, []);
         } else {
-            container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📊</div><p>No forecast data available</p></div>';
+            if (!silent) {
+                container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📊</div><p>No forecast data available</p></div>';
+            }
         }
     }
 }

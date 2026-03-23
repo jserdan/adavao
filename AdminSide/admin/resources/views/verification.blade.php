@@ -1306,12 +1306,17 @@ document.addEventListener('DOMContentLoaded', function() {
     // Load pending verifications
     loadPendingVerifications();
     
-    // Set up auto-refresh every 10 seconds
+    // Auto-refresh every 30 seconds + on socket events
     setInterval(() => {
-        console.log('Auto-refreshing verification data...');
+        if (document.visibilityState === 'visible') {
+            loadVerificationRequests();
+            loadPendingVerifications();
+        }
+    }, 30000);
+    window.addEventListener('adminLiveUpdate', () => {
         loadVerificationRequests();
         loadPendingVerifications();
-    }, 10000);
+    });
 });
 </script>
 @endsection

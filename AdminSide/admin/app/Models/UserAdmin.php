@@ -164,13 +164,15 @@ class UserAdmin extends Authenticatable
     }
 
     /**
-     * Check if user has a specific role
+     * Check if user has a specific role (uses in-memory collection to avoid repeat DB queries)
      */
     public function hasRole($roleName)
     {
-        return $this->adminRoles()
-            ->where('role_name', $roleName)
-            ->exists();
+        // Use the already-loaded relation if available, otherwise load it once
+        if (!$this->relationLoaded('adminRoles')) {
+            $this->load('adminRoles');
+        }
+        return $this->adminRoles->contains('role_name', $roleName);
     }
 
     /**

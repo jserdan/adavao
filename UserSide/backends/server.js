@@ -9,6 +9,8 @@ const db = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 8081;
+let io = null;
+let liveUpdateSeq = 0;
 
 // Needed for correct req.ip behind proxies (e.g., Render)
 app.set('trust proxy', 1);
@@ -52,6 +54,28 @@ const generalLimiter = rateLimit({
   }
 });
 app.use('/api', generalLimiter);
+
+// Trigger lightweight live-refresh signal for every mobile API request.
+// This keeps AdminSide UI updated in near real-time without manual refresh.
+app.use('/api', (req, res, next) => {
+  const shouldSkip = req.path === '/health' || req.path === '/stream';
+  if (shouldSkip) return next();
+
+  res.on('finish', () => {
+    if (!io) return;
+    if (res.statusCode >= 500) return;
+
+    io.emit('update', {
+      version: new Date().toISOString(),
+      source: 'request',
+      method: req.method,
+      path: req.path,
+      seq: ++liveUpdateSeq,
+    });
+  });
+
+  next();
+});
 
 // Global rate limit for report submissions (extra safety; DB checks apply inside handler too)
 const reportLimiter = rateLimit({
@@ -1022,7 +1046,7 @@ const { runMigrations } = require('./runMigrations');
 
   // Init Socket.io
   const { Server } = require("socket.io");
-  const io = new Server(server, {
+  io = new Server(server, {
     cors: {
       origin: "*",
       methods: ["GET", "POST"]

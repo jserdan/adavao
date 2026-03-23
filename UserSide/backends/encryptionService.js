@@ -1,56 +1,44 @@
-/**
- * AES-256-CBC Encryption Service
- * Provides encryption/decryption for sensitive data
- * Uses the same algorithm as Laravel's Crypt facade for compatibility
- */
+// AES helper for sensitive fields.
+// Works with both Node format and Laravel format.
 
 const crypto = require('crypto');
 
-// Encryption configuration - matches Laravel's Crypt facade
+// Matches Laravel's default cipher.
 const ALGORITHM = 'aes-256-cbc';
 const ENCRYPTION_KEY = process.env.APP_KEY || 'base64:ciPqFYTQJ2bGZ0NUrfY7mvwODuOZ6zyUTlIh1D+pb+w=';
 
-/**
- * Get the encryption key from Laravel's APP_KEY format
- * Laravel stores keys as "base64:..." format
- */
+// Get the key from APP_KEY.
+// If APP_KEY is base64:..., decode it first.
 function getEncryptionKey() {
   let key = ENCRYPTION_KEY;
 
-  // If key starts with "base64:", decode it
+  // Decode Laravel-style base64 key.
   if (key.startsWith('base64:')) {
-    key = key.substring(7); // Remove "base64:" prefix
+    key = key.substring(7);
     return Buffer.from(key, 'base64');
   }
 
-  // Otherwise, use the key directly (must be 32 bytes for AES-256)
+  // Fallback: normalize to 32 bytes for AES-256.
   return Buffer.from(key.padEnd(32, '0').substring(0, 32));
 }
 
-/**
- * Encrypt data using AES-256-CBC
- * @param {string} text - The plain text to encrypt
- * @returns {string} - Base64 encoded encrypted data with IV
- */
+// Encrypt plain text using AES-256-CBC.
+// Returns base64(iv + ciphertext).
 function encrypt(text) {
   if (!text) return text;
 
   try {
-    // Generate a random IV (Initialization Vector)
+    // Random 16-byte IV.
     const iv = crypto.randomBytes(16);
 
-    // Get the encryption key
     const key = getEncryptionKey();
 
-    // Create cipher
     const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
 
-    // Encrypt the text
     let encrypted = cipher.update(text, 'utf8', 'base64');
     encrypted += cipher.final('base64');
 
-    // Combine IV and encrypted data in Laravel-compatible format
-    // Format: base64(iv + encrypted)
+    // Output format: base64(iv + ciphertext).
     const combined = Buffer.concat([iv, Buffer.from(encrypted, 'base64')]);
 
     return combined.toString('base64');
@@ -60,24 +48,20 @@ function encrypt(text) {
   }
 }
 
-/**
- * Decrypt data using AES-256-CBC (single pass)
- * @param {string} encryptedData - The base64 encoded encrypted data with IV
- * @returns {string} - The decrypted plain text, or original if not encrypted
- */
+// Try to decrypt one layer.
+// If not decryptable, just return the original input.
 function decryptOnce(encryptedData) {
   if (!encryptedData) return encryptedData;
 
-  // If data is clearly not encrypted (too short or not base64), return as-is
+  // Quick guard for non-encrypted values.
   if (typeof encryptedData !== 'string' || encryptedData.length < 24) {
     return encryptedData;
   }
 
   try {
-    // Get the encryption key
     const key = getEncryptionKey();
 
-    // Try Laravel format first (base64-encoded JSON with iv, value, mac)
+    // Try Laravel payload format first.
     try {
       const decoded = Buffer.from(encryptedData, 'base64').toString('utf8');
       const payload = JSON.parse(decoded);
@@ -87,72 +71,61 @@ function decryptOnce(encryptedData) {
         const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
         let decrypted = decipher.update(encrypted, undefined, 'utf8');
         decrypted += decipher.final('utf8');
-        // Laravel serializes strings with PHP's serialize() — strip 's:N:"..."' wrapper
+        // Strip PHP serialized wrapper if present.
         const phpMatch = decrypted.match(/^s:\d+:"(.*)";$/s);
         if (phpMatch) return phpMatch[1];
         return decrypted;
       }
     } catch (laravelError) {
-      // Not Laravel format, try Node format below
+      // Not Laravel format.
     }
 
-    // Try Node format (IV + encrypted data concatenated in base64)
+    // Try Node format: base64(iv + ciphertext).
     let combined;
     try {
       combined = Buffer.from(encryptedData, 'base64');
     } catch (decodeError) {
-      // Not valid base64, return original
       return encryptedData;
     }
 
-    // Check if combined buffer is at least 17 bytes (16 for IV, 1+ for encrypted)
+    // Need at least IV (16 bytes) + 1 byte payload.
     if (combined.length < 17) {
-      // Data too short to be encrypted, return original
       return encryptedData;
     }
 
-    // Extract IV (first 16 bytes) and encrypted text
+    // Extract IV and ciphertext.
     const iv = combined.slice(0, 16);
     const encrypted = combined.slice(16);
 
-    // Create decipher
     const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
 
-    // Decrypt the text
     let decrypted = decipher.update(encrypted, undefined, 'utf8');
     decrypted += decipher.final('utf8');
 
     return decrypted;
   } catch (error) {
-    // Return original data if decryption fails (might not be encrypted)
+    // Keep original value if decryption fails.
     return encryptedData;
   }
 }
 
-/**
- * Decrypt data using AES-256-CBC — handles multi-layered encryption
- * (caused by old isAlreadyEncrypted bug re-encrypting on every server restart)
- * @param {string} encryptedData - The base64 encoded encrypted data with IV
- * @returns {string} - The fully decrypted plain text
- */
+// Fully decrypt text.
+// Some old values were encrypted multiple times, so we unwrap up to 20 layers.
 function decrypt(encryptedData) {
   if (!encryptedData) return encryptedData;
   if (typeof encryptedData !== 'string' || encryptedData.length < 24) return encryptedData;
 
   let current = encryptedData;
-  for (let i = 0; i < 20; i++) {  // max 20 layers
+  for (let i = 0; i < 20; i++) {
     const decrypted = decryptOnce(current);
-    if (decrypted === current) break;  // no change = plaintext reached
+    if (decrypted === current) break;
     current = decrypted;
   }
   return current;
 }
 
-/**
- * Encrypt file content
- * @param {Buffer} fileBuffer - The file content as buffer
- * @returns {Buffer} - Encrypted file content
- */
+// Encrypt file bytes.
+// Output format is IV + encrypted bytes.
 function encryptFile(fileBuffer) {
   if (!fileBuffer) return fileBuffer;
 
@@ -163,7 +136,7 @@ function encryptFile(fileBuffer) {
 
     const encrypted = Buffer.concat([cipher.update(fileBuffer), cipher.final()]);
 
-    // Prepend IV to encrypted data
+    // Prefix IV for later decryption.
     return Buffer.concat([iv, encrypted]);
   } catch (error) {
     console.error('❌ File encryption error:', error.message);
@@ -171,24 +144,21 @@ function encryptFile(fileBuffer) {
   }
 }
 
-/**
- * Decrypt file content
- * @param {Buffer} encryptedBuffer - The encrypted file content
- * @returns {Buffer} - Decrypted file content
- */
+// Decrypt file bytes.
+// If decrypt fails, return original bytes so we don't break file handling.
 function decryptFile(encryptedBuffer) {
   if (!encryptedBuffer) return encryptedBuffer;
 
-  // Check if buffer is too small to be encrypted (needs at least IV + 1 byte)
+  // Need IV (16 bytes) + 1 byte payload.
   if (encryptedBuffer.length < 17) {
-    console.log('⚠️ File too small to be encrypted, returning as-is');
+    console.log('⚠️ File too small to decrypt, returning as-is');
     return encryptedBuffer;
   }
 
   try {
     const key = getEncryptionKey();
 
-    // Extract IV and encrypted content
+    // Extract IV and ciphertext.
     const iv = encryptedBuffer.slice(0, 16);
     const encrypted = encryptedBuffer.slice(16);
 
@@ -196,18 +166,13 @@ function decryptFile(encryptedBuffer) {
 
     return Buffer.concat([decipher.update(encrypted), decipher.final()]);
   } catch (error) {
-    // If decryption fails, file is probably not encrypted - return original
+    // If decrypt fails, keep original buffer.
     console.log('⚠️ File decryption failed, returning original (likely not encrypted)');
     return encryptedBuffer;
   }
 }
 
-/**
- * Encrypt an object's sensitive fields
- * @param {Object} obj - The object containing data to encrypt
- * @param {Array} fields - Array of field names to encrypt
- * @returns {Object} - Object with encrypted fields
- */
+// Encrypt only selected fields in an object.
 function encryptFields(obj, fields) {
   const encrypted = { ...obj };
 
@@ -220,12 +185,7 @@ function encryptFields(obj, fields) {
   return encrypted;
 }
 
-/**
- * Decrypt an object's encrypted fields
- * @param {Object} obj - The object containing encrypted data
- * @param {Array} fields - Array of field names to decrypt
- * @returns {Object} - Object with decrypted fields
- */
+// Decrypt only selected fields in an object.
 function decryptFields(obj, fields) {
   const decrypted = { ...obj };
 
@@ -238,11 +198,7 @@ function decryptFields(obj, fields) {
   return decrypted;
 }
 
-/**
- * Check if user has permission to decrypt data
- * @param {string} userRole - The user's role
- * @returns {boolean} - True if user can decrypt sensitive data
- */
+// Simple role check for who can view decrypted values.
 function canDecrypt(userRole) {
   const authorizedRoles = ['police', 'admin'];
   return authorizedRoles.includes(userRole);

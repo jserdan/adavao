@@ -853,16 +853,14 @@
                 }
             });
 
-            // Socket.io auto-refresh for live updates
+            // Socket.io live update — dispatches a custom event instead of full page reload
             (function initSocketAutoRefresh() {
-                // Ensure io is loaded from CDN
                 if (typeof io === 'undefined') return;
 
-                // Extract base URL from the old SSE URL format
                 const sseUrl = "{{ env('SSE_URL', 'https://userside-node-server.onrender.com/api/stream') }}";
                 const apiUrl = sseUrl.replace('/api/stream', '');
                 
-                let lastRefresh = 0;
+                let lastDispatch = 0;
                 
                 const socket = io(apiUrl, {
                     transports: ['websocket', 'polling'],
@@ -872,19 +870,17 @@
                 const handleUpdate = () => {
                     const now = Date.now();
                     if (document.visibilityState !== 'visible') return;
-                    if (now - lastRefresh < 1000) return;
-                    lastRefresh = now;
-                    window.location.reload();
+                    if (now - lastDispatch < 3000) return; // 3s debounce
+                    lastDispatch = now;
+                    // Dispatch a lightweight custom event — pages can listen and update their own data
+                    window.dispatchEvent(new CustomEvent('adminLiveUpdate'));
                 };
 
                 socket.on('update', handleUpdate);
 
-                // Force reconnect when tab becomes visible (prevent stale connections)
                 document.addEventListener('visibilitychange', () => {
                     if (document.visibilityState === 'visible') {
-                        if (!socket.connected) {
-                            socket.connect();
-                        }
+                        if (!socket.connected) socket.connect();
                     }
                 });
             })();

@@ -139,30 +139,33 @@ class DashboardController extends Controller
         $activeInvestigations = $stats['activeInvestigations'] ?? 0;
         $solvedThisMonth = $stats['solvedThisMonth'] ?? 0;
         
-        $totalUsers = DB::table('users_public')->count();
+        // Cache sidebar/overview counts for 60 seconds to avoid running on every request
+        $sidebarStats = Cache::remember('dashboard_sidebar_counts', 60, function() {
+            return [
+                'totalUsers' => DB::table('users_public')->count(),
+                'totalPoliceOfficers' => DB::table('user_admin')
+                    ->join('user_admin_roles', 'user_admin.id', '=', 'user_admin_roles.user_admin_id')
+                    ->join('roles', 'user_admin_roles.role_id', '=', 'roles.role_id')
+                    ->where('roles.role_name', 'police')
+                    ->count(),
+                'flaggedUsersCount' => DB::table('users_public')
+                    ->where('total_flags', '>', 0)
+                    ->orWhere('restriction_level', '!=', 'none')
+                    ->count(),
+                'pendingVerificationsCount' => DB::table('verifications')
+                    ->where('status', 'pending')
+                    ->count(),
+                'fakeReports' => DB::table('reports')
+                    ->where('is_valid', 'invalid')
+                    ->count(),
+            ];
+        });
         
-        // Count police officers
-        $totalPoliceOfficers = DB::table('user_admin')
-            ->join('user_admin_roles', 'user_admin.id', '=', 'user_admin_roles.user_admin_id')
-            ->join('roles', 'user_admin_roles.role_id', '=', 'roles.role_id')
-            ->where('roles.role_name', 'police')
-            ->count();
-        
-        // Count flagged users
-        $flaggedUsersCount = DB::table('users_public')
-            ->where('total_flags', '>', 0)
-            ->orWhere('restriction_level', '!=', 'none')
-            ->count();
-            
-        // Count pending verifications
-        $pendingVerificationsCount = DB::table('verifications')
-            ->where('status', 'pending')
-            ->count();
-        
-        // Count fake/invalid reports
-        $fakeReports = DB::table('reports')
-            ->where('is_valid', 'invalid')
-            ->count();
+        $totalUsers = $sidebarStats['totalUsers'];
+        $totalPoliceOfficers = $sidebarStats['totalPoliceOfficers'];
+        $flaggedUsersCount = $sidebarStats['flaggedUsersCount'];
+        $pendingVerificationsCount = $sidebarStats['pendingVerificationsCount'];
+        $fakeReports = $sidebarStats['fakeReports'];
         
         return view('welcome', compact(
             'userRole',

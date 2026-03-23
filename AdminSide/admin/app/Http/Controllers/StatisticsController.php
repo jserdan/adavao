@@ -124,6 +124,8 @@ class StatisticsController extends Controller
     {
         $horizon = $request->input('horizon', 12);
         $crimeType = $request->input('crime_type');
+        $month = $request->input('month');
+        $year = $request->input('year');
 
         try {
             // Ensure API is running
@@ -149,6 +151,19 @@ class StatisticsController extends Controller
                  // API returns raw list of points
                  $response['data'] = $apiResponse;
             }
+
+            // Always provide historical points aligned with active statistics filter
+            try {
+                $historical = $this->_getCrimeStats($month, $year);
+                $response['historical'] = $historical['monthly'] ?? [];
+            } catch (\Throwable $e) {
+                $response['historical'] = [];
+            }
+
+            // Real-time online adjustment using fresh submitted reports.
+            // This keeps forecasts responsive when new reports arrive between retraining windows.
+            $response = $this->applyLiveReportAdjustment($response, $crimeType);
+            $response['filter'] = ['month' => $month, 'year' => $year];
             
             return response()->json($response);
         } catch (\Exception $e) {
@@ -162,13 +177,16 @@ class StatisticsController extends Controller
 
     private function _getForecast($horizon, $crimeType = null) 
     {
+        $liveVersion = $this->getForecastLiveVersionToken();
+
         // Cache key must include crime type
         $cacheKey = "sarima_forecast_full_{$horizon}";
         if ($crimeType) {
             $cacheKey .= "_" . md5($crimeType);
         }
+        $cacheKey .= "_v{$liveVersion}";
 
-        return Cache::remember($cacheKey, 3600, function () use ($horizon, $crimeType) {
+        return Cache::remember($cacheKey, 120, function () use ($horizon, $crimeType) {
             $params = ['horizon' => $horizon];
             if ($crimeType) {
                 $params['crime_type'] = $crimeType;
@@ -184,6 +202,81 @@ class StatisticsController extends Controller
             
             throw new \Exception('Failed to fetch forecast from API: ' . $response->status());
         });
+    }
+
+    private function getForecastLiveVersionToken(): string
+    {
+        try {
+            $row = DB::selectOne(
+                "SELECT GREATEST(
+                    COALESCE((SELECT MAX(updated_at) FROM reports), '1970-01-01'::timestamp),
+                    COALESCE((SELECT MAX(updated_at) FROM patrol_dispatches), '1970-01-01'::timestamp)
+                ) AS latest"
+            );
+
+            $latest = $row->latest ?? null;
+            if (!$latest) return '0';
+
+            return (string) strtotime((string) $latest);
+        } catch (\Throwable $e) {
+            return '0';
+        }
+    }
+
+    private function applyLiveReportAdjustment(array $response, $crimeType = null): array
+    {
+        if (!isset($response['data']) || !is_array($response['data']) || count($response['data']) === 0) {
+            return $response;
+        }
+
+        try {
+            $recentQuery = DB::table('reports')
+                ->where('created_at', '>=', Carbon::now()->subDay())
+                ->where(function ($q) {
+                    $q->whereNull('is_valid')
+                      ->orWhere('is_valid', '!=', self::REPORT_INVALID);
+                });
+
+            if (!empty($crimeType)) {
+                $recentQuery->whereRaw("UPPER(COALESCE(report_type::text, '')) LIKE ?", ['%'.strtoupper($crimeType).'%']);
+            }
+
+            $recentReports = (int) $recentQuery->count();
+            $signal = min(80, max(0, $recentReports));
+
+            if ($signal <= 0) {
+                return $response;
+            }
+
+            $decay = 0.65;
+            $adjusted = [];
+
+            foreach ($response['data'] as $idx => $point) {
+                $base = floatval($point['forecast'] ?? 0);
+                $lower = floatval($point['lower_ci'] ?? $base);
+                $upper = floatval($point['upper_ci'] ?? $base);
+
+                $shift = $signal * pow($decay, $idx);
+
+                $point['forecast'] = round(max(0, $base + $shift), 2);
+                $point['lower_ci'] = round(max(0, $lower + $shift), 2);
+                $point['upper_ci'] = round(max(0, $upper + $shift), 2);
+
+                $adjusted[] = $point;
+            }
+
+            $response['data'] = $adjusted;
+            $response['live_adjustment'] = [
+                'enabled' => true,
+                'recent_reports_24h' => $recentReports,
+                'signal_applied' => $signal,
+                'decay' => $decay,
+            ];
+        } catch (\Throwable $e) {
+            // Keep base forecast if adjustment query fails
+        }
+
+        return $response;
     }
 
     /**

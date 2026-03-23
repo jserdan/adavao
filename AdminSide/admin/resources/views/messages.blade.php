@@ -773,7 +773,9 @@
 
         // Load conversations list and monitor for new messages
         loadConversationsList();
-        setInterval(loadConversationsList, 5000); // Check every 5 seconds
+        setInterval(loadConversationsList, 30000); // Check every 30 seconds
+        // Also refresh on live socket events
+        window.addEventListener('adminLiveUpdate', loadConversationsList);
     });
 
     function selectUser(userId, userName) {
@@ -821,13 +823,17 @@
         if (messageCheckInterval) {
             clearInterval(messageCheckInterval);
         }
-        messageCheckInterval = setInterval(() => loadConversation(userId, true), 2000);
+        messageCheckInterval = setInterval(() => loadConversation(userId, true), 10000);
         
         // Set up auto-refresh for typing status
         if (typingCheckInterval) {
             clearInterval(typingCheckInterval);
         }
-        typingCheckInterval = setInterval(() => checkUserTypingStatus(userId), 800);
+        typingCheckInterval = setInterval(() => checkUserTypingStatus(userId), 3000);
+        // Also refresh messages on live socket events
+        window.addEventListener('adminLiveUpdate', () => {
+            if (currentUserId) loadConversation(currentUserId, true);
+        });
     }
 
     function loadConversation(userId, isBackground = false) {

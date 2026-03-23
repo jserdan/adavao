@@ -920,6 +920,9 @@
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
 <script>
+    const dashboardDateFrom = @json($dateFrom ?? null);
+    const dashboardDateTo = @json($dateTo ?? null);
+
     document.addEventListener('DOMContentLoaded', function() {
         if(document.getElementById('forecast-content')) {
             setTimeout(fetchForecast, 1000); // Small delay to allow UI to settle
@@ -982,7 +985,25 @@
 
     function fetchForecast() {
         // Fetch forecast for next 1 month
-        fetch('/api/statistics/forecast?horizon=1')
+        const params = new URLSearchParams({ horizon: '1' });
+
+        // Apply dashboard date filter to AI insight context
+        // If both dates are in one month, use month filter; else use year from the "from" date.
+        if (dashboardDateFrom && dashboardDateTo) {
+            const fromMonth = String(dashboardDateFrom).substring(0, 7);
+            const toMonth = String(dashboardDateTo).substring(0, 7);
+            if (fromMonth === toMonth) {
+                params.set('month', fromMonth);
+            } else {
+                params.set('year', String(dashboardDateFrom).substring(0, 4));
+            }
+        } else if (dashboardDateFrom) {
+            params.set('month', String(dashboardDateFrom).substring(0, 7));
+        } else if (dashboardDateTo) {
+            params.set('month', String(dashboardDateTo).substring(0, 7));
+        }
+
+        fetch('/api/statistics/forecast?' + params.toString())
             .then(response => response.json())
             .then(data => {
                 const loadingEl = document.getElementById('forecast-loading');
@@ -1444,48 +1465,37 @@
         document.getElementById('crime-type-filter').value = '';
         loadMiniMapReports({});
     };
-    // Auto-refresh dashboard stats every 3 seconds
+    // Lightweight dashboard stat refresh (every 30s + on socket events)
     function checkForNewStats() {
-        fetch('{{ route("dashboard") }}', {
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest'
-            }
+        if (document.visibilityState !== 'visible') return;
+        fetch('/api/reports/counts', {
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
         })
-        .then(response => response.text())
-        .then(html => {
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(html, 'text/html');
-            
-            // Update stat values
+        .then(r => r.json())
+        .then(data => {
+            if (!data) return;
             const statCards = document.querySelectorAll('.stat-value');
-            const newStatCards = doc.querySelectorAll('.stat-value');
-            let hasUpdates = false;
-            
-            statCards.forEach((card, index) => {
-                if (newStatCards[index] && card.textContent !== newStatCards[index].textContent) {
-                    console.log('📊 Dashboard stat updated:', card.parentElement.querySelector('.stat-title').textContent, card.textContent, '→', newStatCards[index].textContent);
-                    card.textContent = newStatCards[index].textContent;
-                    hasUpdates = true;
-                    // Add flash animation
+            // Update the 3 complaint summary cards
+            const newValues = [data.total ?? '', data.resolved ?? '', data.fake ?? ''];
+            statCards.forEach((card, i) => {
+                if (newValues[i] !== undefined && card.textContent.trim() !== String(newValues[i])) {
+                    card.textContent = newValues[i];
                     card.style.animation = 'flash 0.5s';
-                    setTimeout(() => {
-                        card.style.animation = '';
-                    }, 500);
+                    setTimeout(() => card.style.animation = '', 500);
                 }
             });
-            
-            if (hasUpdates) {
-                console.log('✅ Dashboard statistics updated successfully');
-            }
         })
-        .catch(error => {
-            console.error('❌ Error checking for new stats:', error);
-        });
+        .catch(() => {});
     }
     
-    // Start auto-refresh when page loads
-    console.log('🔄 Dashboard auto-refresh enabled - Checking every 3 seconds for all users');
-    setInterval(checkForNewStats, 3000);
+    // Refresh every 30 seconds + immediately on socket live updates
+    setInterval(checkForNewStats, 30000);
+    window.addEventListener('adminLiveUpdate', () => {
+        checkForNewStats();
+        if (document.getElementById('forecast-content')) {
+            fetchForecast();
+        }
+    });
 </script>
 
 <style>
