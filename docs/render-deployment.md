@@ -32,7 +32,8 @@ If your Render plan does not include Shell access, urgency score backfill is now
 
 Controls (set in Render environment variables for the AdminSide service):
 - `URGENCY_BACKFILL_ON_DEPLOY=1` to run `php artisan reports:recalculate-urgency` during startup (default: `1`)
-- `URGENCY_BACKFILL_FAIL_HARD=1` to make startup fail if backfill fails (default: `0`)
+- `URGENCY_BACKFILL_FAIL_HARD=1` to make startup fail if backfill fails (default: `1`)
+- `URGENCY_BACKFILL_RETRIES=2` to retry recalculation before failing (default: `2`)
 
 Recommended for production:
 - Keep `URGENCY_BACKFILL_ON_DEPLOY=1` until old records are corrected

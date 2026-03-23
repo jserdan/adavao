@@ -29,69 +29,134 @@ class RecalculateUrgencyScores extends Command
     {
         $this->info('Starting urgency score recalculation...');
 
-        $reports = DB::table('reports')->get();
         $count = 0;
         $updated = 0;
 
-        // Crime Categories (Exact Match from UserSide)
-        $CRITICAL_CRIMES = ['Murder', 'Homicide', 'Rape', 'Sexual Assault'];
-        $HIGH_PRIORITY = ['Robbery', 'Physical Injury', 'Domestic Violence', 'Missing Person', 'Harassment'];
-        $MEDIUM_PRIORITY = ['Theft', 'Burglary', 'Break-in', 'Carnapping', 'Motornapping', 'Threats', 'Fraud', 'Cybercrime'];
+        // Keep this aligned with ReportController::setPriorityFlags() urgency tiers.
+        $CRITICAL_CRIMES = [
+            'Murder', 'Homicide', 'Rape', 'Sexual Assault',
+            'Kidnapping', 'Abduction', 'Stabbing', 'Shooting',
+            'Human Trafficking', 'Child Abuse', 'Exploitation',
+        ];
+        $HIGH_PRIORITY = [
+            'Robbery', 'Holdup', 'Physical Assault', 'Physical Injury',
+            'Domestic Violence', 'Missing Person', 'Harassment',
+            'Arson', 'Fire Emergency', 'Drug', 'Illegal Firearms',
+            'Weapons', 'Sextortion', 'Sexual Harassment',
+        ];
+        $MEDIUM_PRIORITY = [
+            'Theft', 'Pickpocketing', 'Burglary', 'Break-in',
+            'Carnapping', 'Motornapping', 'Motorcycle Theft', 'Vehicle Theft',
+            'Threats', 'Intimidation', 'Fraud', 'Scam', 'Phishing',
+            'Cybercrime', 'Cyberbullying', 'Hacking', 'Identity Theft',
+            'Vandalism', 'Trespassing', 'Road Accident',
+            'Online Threats', 'Medical Emergency',
+        ];
 
-        foreach ($reports as $report) {
-            $count++;
-            
-            // Parse crime types
-            $crimeTypes = [];
-            $rawType = $report->report_type; // DB column is 'report_type' or 'crime_type'? Let's check schema used report_type
-            
-            if (empty($rawType)) continue;
+        Report::query()
+            ->select(['report_id', 'report_type'])
+            ->withCount('media')
+            ->orderBy('report_id')
+            ->chunkById(200, function ($reports) use (&$count, &$updated, $CRITICAL_CRIMES, $HIGH_PRIORITY, $MEDIUM_PRIORITY) {
+                foreach ($reports as $report) {
+                    $count++;
 
-            // Handle JSON or String
-            if ($this->isJson($rawType)) {
-                $crimeTypes = json_decode($rawType, true);
-                if (!is_array($crimeTypes)) $crimeTypes = [$crimeTypes];
-            } else {
-                $crimeTypes = [$rawType];
-            }
+                    $crimeTypes = $this->normalizeCrimeTypes($report->report_type);
+                    if (empty($crimeTypes)) {
+                        continue;
+                    }
 
-            // Calculate Score
-            $score = 30; // Base LOW
-            
-            $hasCritical = false;
-            $hasHigh = false;
-            $hasMedium = false;
+                    $score = 30; // Base LOW
+                    $hasCritical = false;
+                    $hasHigh = false;
+                    $hasMedium = false;
 
-            foreach ($crimeTypes as $crime) {
-                // Always use case-insensitive partial matching for robust detection
-                $matched = false;
-                foreach ($CRITICAL_CRIMES as $c) {
-                    if (stripos($crime, $c) !== false) { $hasCritical = true; $matched = true; break; }
-                }
-                if (!$matched) {
-                    foreach ($HIGH_PRIORITY as $c) {
-                        if (stripos($crime, $c) !== false) { $hasHigh = true; $matched = true; break; }
+                    foreach ($crimeTypes as $crime) {
+                        $matched = false;
+                        foreach ($CRITICAL_CRIMES as $c) {
+                            if (stripos($crime, $c) !== false) {
+                                $hasCritical = true;
+                                $matched = true;
+                                break;
+                            }
+                        }
+
+                        if (!$matched) {
+                            foreach ($HIGH_PRIORITY as $c) {
+                                if (stripos($crime, $c) !== false) {
+                                    $hasHigh = true;
+                                    $matched = true;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (!$matched) {
+                            foreach ($MEDIUM_PRIORITY as $c) {
+                                if (stripos($crime, $c) !== false) {
+                                    $hasMedium = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    if ($hasCritical) {
+                        $score = 100;
+                    } elseif ($hasHigh) {
+                        $score = 75;
+                    } elseif ($hasMedium) {
+                        $score = 50;
+                    }
+
+                    // Match admin scoring behavior: +10 when report has evidence/media.
+                    if ((int) $report->media_count > 0) {
+                        $score = min(100, $score + 10);
+                    }
+
+                    DB::table('reports')
+                        ->where('report_id', $report->report_id)
+                        ->update(['urgency_score' => $score]);
+
+                    $updated++;
+
+                    if ($count % 100 === 0) {
+                        $this->info("Processed {$count} reports...");
                     }
                 }
-                if (!$matched) {
-                    foreach ($MEDIUM_PRIORITY as $c) {
-                        if (stripos($crime, $c) !== false) { $hasMedium = true; break; }
-                    }
-                }
-            }
+            }, 'report_id', 'report_id');
 
-            if ($hasCritical) $score = 100;
-            elseif ($hasHigh) $score = 75;
-            elseif ($hasMedium) $score = 50;
+        $this->info("✅ Completed! Updated {$updated} reports.");
+    }
 
-            // Update record
-            DB::table('reports')->where('report_id', $report->report_id)->update(['urgency_score' => $score]);
-            $updated++;
-            
-            if ($count % 50 == 0) $this->info("Processed $count reports...");
+    private function normalizeCrimeTypes($rawType): array
+    {
+        if (is_array($rawType)) {
+            return array_values(array_filter(array_map(function ($item) {
+                return is_string($item) ? trim($item) : trim((string) $item);
+            }, $rawType)));
         }
 
-        $this->info("✅ Completed! Updated $updated reports.");
+        if (is_string($rawType)) {
+            $decoded = json_decode($rawType, true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                if (is_array($decoded)) {
+                    return array_values(array_filter(array_map(function ($item) {
+                        return is_string($item) ? trim($item) : trim((string) $item);
+                    }, $decoded)));
+                }
+
+                if (!empty($decoded)) {
+                    return [trim((string) $decoded)];
+                }
+            }
+
+            if (trim($rawType) !== '') {
+                return array_values(array_filter(array_map('trim', explode(',', $rawType))));
+            }
+        }
+
+        return [];
     }
 
     private function isJson($string) {

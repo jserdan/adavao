@@ -12,7 +12,9 @@ services:
       - key: URGENCY_BACKFILL_ON_DEPLOY
         value: "1"
       - key: URGENCY_BACKFILL_FAIL_HARD
-        value: "0"
+        value: "1"
+      - key: URGENCY_BACKFILL_RETRIES
+        value: "2"
   - type: web
     name: alertdavao-userside-backend
     env: node
