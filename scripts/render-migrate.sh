@@ -32,3 +32,27 @@ php artisan db:seed --class=PoliceStationsSeeder --force 2>/dev/null || echo "  
 php artisan db:seed --class=PatrolOfficerSeeder --force
 
 echo "✅ Seeders complete."
+
+# Optional no-shell backfill for urgency_score.
+# Useful on Render free plans where service shell is unavailable.
+#
+# Controls:
+# - URGENCY_BACKFILL_ON_DEPLOY=1 to enable (default: 1)
+# - URGENCY_BACKFILL_FAIL_HARD=1 to fail startup when backfill fails (default: 0)
+RUN_URGENCY_BACKFILL="${URGENCY_BACKFILL_ON_DEPLOY:-1}"
+FAIL_HARD_ON_URGENCY_BACKFILL="${URGENCY_BACKFILL_FAIL_HARD:-0}"
+
+if [[ "$RUN_URGENCY_BACKFILL" == "1" ]]; then
+  echo "🚨 Recalculating report urgency scores..."
+  if php artisan reports:recalculate-urgency; then
+    echo "✅ Urgency score backfill complete."
+  else
+    if [[ "$FAIL_HARD_ON_URGENCY_BACKFILL" == "1" ]]; then
+      echo "❌ Urgency score backfill failed (fail-hard enabled)." >&2
+      exit 1
+    fi
+    echo "⚠️ Urgency score backfill failed. Continuing startup (fail-hard disabled)."
+  fi
+else
+  echo "ℹ️ Skipping urgency score backfill (URGENCY_BACKFILL_ON_DEPLOY=$RUN_URGENCY_BACKFILL)."
+fi

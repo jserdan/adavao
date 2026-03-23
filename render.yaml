@@ -9,6 +9,10 @@ services:
     envVars:
       - key: PHP_VERSION
         value: 8.1
+      - key: URGENCY_BACKFILL_ON_DEPLOY
+        value: "1"
+      - key: URGENCY_BACKFILL_FAIL_HARD
+        value: "0"
   - type: web
     name: alertdavao-userside-backend
     env: node

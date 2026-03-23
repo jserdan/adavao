@@ -1693,7 +1693,7 @@
                                 </td>
                                 <td>
                                     @php
-                                        $createdAt = $report->created_at;
+                                        $createdAt = optional($report->dispatch)->dispatched_at ?? $report->created_at;
                                         $arrivedAt = optional($report->dispatch)->arrived_at;
                                         $threeMinutes = 180; // 3 minutes in seconds
 

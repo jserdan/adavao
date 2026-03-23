@@ -26,6 +26,18 @@ Render uses the commands defined in `render.yaml`:
 The deploy migration script lives at `scripts/render-migrate.sh` and is run on every redeploy.
 Add any future DB changes so they can be applied automatically during deployment (preferred: Laravel migrations executed by the script).
 
+### No-Shell Backfill for Urgency Scores
+
+If your Render plan does not include Shell access, urgency score backfill is now executed from the deploy script automatically.
+
+Controls (set in Render environment variables for the AdminSide service):
+- `URGENCY_BACKFILL_ON_DEPLOY=1` to run `php artisan reports:recalculate-urgency` during startup (default: `1`)
+- `URGENCY_BACKFILL_FAIL_HARD=1` to make startup fail if backfill fails (default: `0`)
+
+Recommended for production:
+- Keep `URGENCY_BACKFILL_ON_DEPLOY=1` until old records are corrected
+- Then set `URGENCY_BACKFILL_ON_DEPLOY=0` to speed up future deploys
+
 ### 2) Configure Environment Variables
 
 Set these in Render’s service settings:

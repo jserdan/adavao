@@ -660,8 +660,9 @@ async function submitReport(req, res) {
     ];
 
     // Check if report contains any Focus Crime
-    const isFocusCrime = crimeTypesArray.some(crime => {
-      const isFocus = FOCUS_CRIMES.some(fc => crime.toLowerCase().trim().includes(fc.toLowerCase()));
+    const isFocusCrime = crimeTypesNormalized.some(crime => {
+      const crimeLower = crime.toLowerCase();
+      const isFocus = FOCUS_CRIMES.some(fc => crimeLower.includes(fc.toLowerCase()));
       if (isFocus) console.log(`🔴 FOCUS CRIME detected: ${crime}`);
       return isFocus;
     });
@@ -685,25 +686,28 @@ async function submitReport(req, res) {
     let urgencyLevel = 'LOW';
 
     // Check each crime type and find the highest priority
-    console.log(`📋 Analyzing crime types:`, crimeTypesArray);
+    console.log(`📋 Analyzing crime types:`, crimeTypesNormalized);
 
-    const hasCritical = crimeTypesArray.some(crime => {
-      // Case insensitive check
-      const isCritical = CRITICAL_CRIMES.some(c => c.toLowerCase() === crime.toLowerCase().trim());
+    const hasCritical = crimeTypesNormalized.some(crime => {
+      // Case-insensitive partial match to support labels like "Murder/Homicide"
+      const crimeLower = crime.toLowerCase();
+      const isCritical = CRITICAL_CRIMES.some(c => crimeLower.includes(c.toLowerCase()));
       if (isCritical) console.log(`🔴 CRITICAL crime detected: ${crime}`);
       return isCritical;
     });
 
-    const hasHigh = crimeTypesArray.some(crime => {
-      // Case insensitive check
-      const isHigh = HIGH_PRIORITY.some(c => c.toLowerCase() === crime.toLowerCase().trim());
+    const hasHigh = crimeTypesNormalized.some(crime => {
+      // Case-insensitive partial match for combined labels
+      const crimeLower = crime.toLowerCase();
+      const isHigh = HIGH_PRIORITY.some(c => crimeLower.includes(c.toLowerCase()));
       if (isHigh) console.log(`🟠 HIGH priority crime detected: ${crime}`);
       return isHigh;
     });
 
-    const hasMedium = crimeTypesArray.some(crime => {
-      // Case insensitive check
-      const isMedium = MEDIUM_PRIORITY.some(c => c.toLowerCase() === crime.toLowerCase().trim());
+    const hasMedium = crimeTypesNormalized.some(crime => {
+      // Case-insensitive partial match for combined labels
+      const crimeLower = crime.toLowerCase();
+      const isMedium = MEDIUM_PRIORITY.some(c => crimeLower.includes(c.toLowerCase()));
       if (isMedium) console.log(`🟡 MEDIUM priority crime detected: ${crime}`);
       return isMedium;
     });
@@ -864,15 +868,10 @@ async function submitReport(req, res) {
       }
     }
 
-    // Create report record
-
-    // 📝 AUTO-GENERATE TITLE if not provided
-    // Format: "[Crime Type] - [Barangay] - [Date]"
-    // Example: "Theft - Poblacion District - Jan 21, 2026"
     let reportTitle = title;
 
     if (!reportTitle || reportTitle.trim() === '') {
-      const primaryCrimeType = crimeTypesNormalized[0] || crimeTypesArray[0] || 'Incident'; // Use first crime type
+      const primaryCrimeType = crimeTypesNormalized[0] || crimeTypesArray[0] || 'Incident'; 
       const dateObj = new Date(incident_date);
       const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       const formattedDate = `${monthNames[dateObj.getMonth()]} ${dateObj.getDate()}, ${dateObj.getFullYear()}`;
@@ -883,35 +882,35 @@ async function submitReport(req, res) {
       console.log(`📝 Using provided title: "${reportTitle}"`);
     }
 
-    // 🔐 ENCRYPT SENSITIVE DATA (AES-256-CBC)
-    // As per capstone requirement: encrypt incident reports for confidentiality
-    console.log("🔐 Encrypting report description (AES-256-CBC):");
-    console.log("   Original Description Length:", description.length, "characters");
-    console.log("   Original Description Preview:", description.substring(0, 50) + "...");
+    // ENCRYPT SENSITIVE DATA (AES-256-CBC)
+    // Capstone requirement: encrypt incident reports for confidentiality
+    console.log(" Encrypting report description (AES-256-CBC):");
+    console.log("  Original Description Length:", description.length, "characters");
+    console.log("  Original Description Preview:", description.substring(0, 50) + "...");
 
     const encryptedDescription = encrypt(description);
 
-    console.log("   Encrypted Description (base64):", encryptedDescription.substring(0, 50) + "...");
-    console.log("   Encrypted Length:", encryptedDescription.length, "characters");
-    console.log("✅ Encryption complete - data secured with AES-256-CBC");
+    console.log("Encrypted Description (base64):", encryptedDescription.substring(0, 50) + "...");
+    console.log("Encrypted Length:", encryptedDescription.length, "characters");
+    console.log("Encryption complete - data secured with AES-256-CBC");
 
     // Note: stationId can be NULL if coordinates don't fall within any polygon
     let reportResult;
     try {
       [reportResult] = await connection.query(
         `INSERT INTO reports
-        (user_id, location_id, title, report_type, description, date_reported, status, is_anonymous, assigned_station_id, is_focus_crime, has_sufficient_info, content_hash, created_at, updated_at) 
-         VALUES($1, $2, $3, $4, $5, $6, 'pending', $7, $8, $9, $10, $11, NOW(), NOW()) RETURNING report_id`,
-        [effectiveUserId, locationId, reportTitle, reportType, encryptedDescription, incident_date, isAnon, stationId, isFocusCrime, hasSufficientInfo, req.__contentHash || null]
+        (user_id, location_id, title, report_type, description, date_reported, status, is_anonymous, assigned_station_id, urgency_score, is_focus_crime, has_sufficient_info, content_hash, created_at, updated_at) 
+         VALUES($1, $2, $3, $4, $5, $6, 'pending', $7, $8, $9, $10, $11, $12, NOW(), NOW()) RETURNING report_id`,
+        [effectiveUserId, locationId, reportTitle, reportType, encryptedDescription, incident_date, isAnon, stationId, urgencyScore, isFocusCrime, hasSufficientInfo, req.__contentHash || null]
       );
     } catch (e) {
       const message = String(e?.message || '');
       if (message.includes('column "content_hash"')) {
         [reportResult] = await connection.query(
           `INSERT INTO reports
-          (user_id, location_id, title, report_type, description, date_reported, status, is_anonymous, assigned_station_id, is_focus_crime, has_sufficient_info, created_at, updated_at) 
-           VALUES($1, $2, $3, $4, $5, $6, 'pending', $7, $8, $9, $10, NOW(), NOW()) RETURNING report_id`,
-          [effectiveUserId, locationId, reportTitle, reportType, encryptedDescription, incident_date, isAnon, stationId, isFocusCrime, hasSufficientInfo]
+          (user_id, location_id, title, report_type, description, date_reported, status, is_anonymous, assigned_station_id, urgency_score, is_focus_crime, has_sufficient_info, created_at, updated_at) 
+           VALUES($1, $2, $3, $4, $5, $6, 'pending', $7, $8, $9, $10, $11, NOW(), NOW()) RETURNING report_id`,
+          [effectiveUserId, locationId, reportTitle, reportType, encryptedDescription, incident_date, isAnon, stationId, urgencyScore, isFocusCrime, hasSufficientInfo]
         );
       } else {
         throw e;

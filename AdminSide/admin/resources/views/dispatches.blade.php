@@ -361,7 +361,8 @@
                         <td>
                             @if($dispatch->report->validated_at)
                                 @php
-                                    $diffInSeconds = Carbon\Carbon::parse($dispatch->report->created_at)->diffInSeconds($dispatch->report->validated_at);
+                                    $timerStartAt = $dispatch->dispatched_at ?? $dispatch->report->created_at;
+                                    $diffInSeconds = Carbon\Carbon::parse($timerStartAt)->diffInSeconds($dispatch->report->validated_at);
                                     $isWithinSLA = $diffInSeconds <= 180;
                                     $h = floor($diffInSeconds / 3600);
                                     $m = floor(($diffInSeconds % 3600) / 60);
@@ -380,7 +381,10 @@
                                     <span class="badge badge-danger">Exceeded (+{{ $timeString }})</span>
                                 @endif
                             @else
-                                <div class="sla-timer" data-created-at="{{ $dispatch->report->created_at->timestamp }}">Pending...</div>
+                                @php
+                                    $timerStartAt = $dispatch->dispatched_at ?? $dispatch->report->created_at;
+                                @endphp
+                                <div class="sla-timer" data-created-at="{{ $timerStartAt->timestamp }}">Pending...</div>
                             @endif
                         </td>
                         <td>{{ optional($dispatch->report->validated_at)->format('M d, H:i') ?? '-' }}</td>
