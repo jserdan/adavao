@@ -9,6 +9,8 @@ use App\Models\PoliceStation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 use Carbon\Carbon;
 use App\Services\EncryptionService;
 
@@ -363,6 +365,8 @@ class DispatchController extends Controller
      */
     public function getOnDutyOfficers()
     {
+        $this->ensureSeededPatrolAccounts();
+
         // Use raw SQL to join with patrol_locations for better accuracy
         $officers = DB::select("
             SELECT 
@@ -388,6 +392,82 @@ class DispatchController extends Controller
     ");
 
         return response()->json(['officers' => $officers]);
+    }
+
+    /**
+     * Ensure seeded PS patrol accounts exist in users_public.
+     * This makes officer dropdown resilient even when seeders were not run.
+     */
+    private function ensureSeededPatrolAccounts(): void
+    {
+        if (!Schema::hasTable('users_public') || !Schema::hasTable('police_stations')) {
+            return;
+        }
+
+        $stations = DB::table('police_stations')
+            ->select('station_id', 'station_name')
+            ->whereRaw("LOWER(COALESCE(station_name, '')) NOT LIKE ?", ['%cybercrime%'])
+            ->orderBy('station_id')
+            ->get();
+
+        foreach ($stations as $station) {
+            $psNumber = null;
+            if (preg_match('/\bPS\s*(\d+)\b/i', (string) $station->station_name, $matches)) {
+                $psNumber = (int) $matches[1];
+            } elseif (preg_match('/\bstation\s*(\d+)\b/i', (string) $station->station_name, $matches)) {
+                $psNumber = (int) $matches[1];
+            }
+            if ($psNumber === null || $psNumber <= 0) {
+                $psNumber = (int) $station->station_id;
+            }
+
+            $psCode = str_pad((string) $psNumber, 2, '0', STR_PAD_LEFT);
+            $email = 'ps' . $psCode . '.patrol@alertdavao.local';
+
+            $insertData = [
+                'firstname' => 'PS' . $psNumber,
+                'lastname' => 'Patrol',
+                'email' => $email,
+                'contact' => '+6399000' . str_pad((string) $psNumber, 4, '0', STR_PAD_LEFT),
+                'password' => Hash::make('patrol123'),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ];
+
+            $updateData = [
+                'firstname' => 'PS' . $psNumber,
+                'lastname' => 'Patrol',
+                'updated_at' => now(),
+            ];
+
+            if (Schema::hasColumn('users_public', 'user_role')) {
+                $insertData['user_role'] = 'patrol_officer';
+                $updateData['user_role'] = 'patrol_officer';
+            }
+            if (Schema::hasColumn('users_public', 'role')) {
+                $insertData['role'] = 'patrol_officer';
+                $updateData['role'] = 'patrol_officer';
+            }
+            if (Schema::hasColumn('users_public', 'is_on_duty')) {
+                $insertData['is_on_duty'] = false;
+                $updateData['is_on_duty'] = false;
+            }
+            if (Schema::hasColumn('users_public', 'assigned_station_id')) {
+                $insertData['assigned_station_id'] = $station->station_id;
+                $updateData['assigned_station_id'] = $station->station_id;
+            }
+            if (Schema::hasColumn('users_public', 'email_verified_at')) {
+                $insertData['email_verified_at'] = now();
+                $updateData['email_verified_at'] = now();
+            }
+
+            $exists = DB::table('users_public')->where('email', $email)->exists();
+            if ($exists) {
+                DB::table('users_public')->where('email', $email)->update($updateData);
+            } else {
+                DB::table('users_public')->insert($insertData);
+            }
+        }
     }
 
     /**
