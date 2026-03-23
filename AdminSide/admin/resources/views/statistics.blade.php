@@ -1521,6 +1521,7 @@ async function loadForecast(silent = false) {
     
     try {
         let url = `/api/statistics/forecast?horizon=${horizon}`;
+        if (crimeType) url += `&crime_type=${encodeURIComponent(crimeType)}`;
         if (currentFilter.month) url += `&month=${encodeURIComponent(currentFilter.month)}`;
         else if (currentFilter.year) url += `&year=${encodeURIComponent(currentFilter.year)}`;
         
@@ -1528,10 +1529,7 @@ async function loadForecast(silent = false) {
         const data = await response.json();
         
         if (data.status === 'success' && data.data) {
-            let forecastSeries = Array.isArray(data.data) ? data.data : [];
-            if (crimeType) {
-                forecastSeries = scaleForecastSeriesByCrimeType(forecastSeries, crimeType);
-            }
+            const forecastSeries = Array.isArray(data.data) ? data.data : [];
             forecastData = forecastSeries;
             
             // Update API status
@@ -1606,33 +1604,6 @@ function filterHistoricalByMonthsBack(historicalData, monthsBack) {
         if (!Number.isFinite(year) || !Number.isFinite(month)) return false;
         const pointDate = new Date(year, month - 1, 1);
         return pointDate >= cutoff;
-    });
-}
-
-function getCrimeTypeShare(crimeType) {
-    if (!crimeType || !crimeStats?.byType?.length) return 1;
-    const normalized = String(crimeType).toUpperCase();
-    const total = crimeStats.byType.reduce((sum, d) => sum + (parseFloat(d.count) || 0), 0);
-    if (!total) return 0;
-    const selected = crimeStats.byType
-        .filter(d => String(d.type || '').toUpperCase() === normalized)
-        .reduce((sum, d) => sum + (parseFloat(d.count) || 0), 0);
-    return selected / total;
-}
-
-function scaleForecastSeriesByCrimeType(series, crimeType) {
-    if (!Array.isArray(series) || !series.length || !crimeType) return series || [];
-    const share = Math.max(0, Math.min(1, getCrimeTypeShare(crimeType)));
-    return series.map(point => {
-        const forecast = parseFloat(point?.forecast || 0);
-        const lower = parseFloat(point?.lower_ci || forecast);
-        const upper = parseFloat(point?.upper_ci || forecast);
-        return {
-            ...point,
-            forecast: Math.max(0, +(forecast * share).toFixed(2)),
-            lower_ci: Math.max(0, +(lower * share).toFixed(2)),
-            upper_ci: Math.max(0, +(upper * share).toFixed(2))
-        };
     });
 }
 

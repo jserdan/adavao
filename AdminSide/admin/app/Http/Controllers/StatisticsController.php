@@ -133,8 +133,9 @@ class StatisticsController extends Controller
             // Ensure API is running
             $this->autoStartSarimaApi();
             
-            // Get full response from API (scalable)
-            $apiResponse = $this->_getForecast($horizon, $crimeType);
+            // Get base all-crimes response from API (scalable)
+            // Crime-specific view is derived consistently from this base forecast.
+            $apiResponse = $this->_getForecast($horizon, null);
             
             // Base response structure
             $response = [
@@ -168,19 +169,18 @@ class StatisticsController extends Controller
                 $response['historical'] = [];
             }
 
-            // If a specific crime type is selected but SARIMA API returns global forecast,
-            // scale forecast to that crime type using historical share.
-            $response = $this->applyCrimeTypeShareScaling($response, $crimeType, $month, $year);
-
             // Dashboard date-range context (date_from/date_to)
-            $response = $this->applyDateRangeContextScaling($response, $dateFrom, $dateTo, $crimeType);
+            $response = $this->applyDateRangeContextScaling($response, $dateFrom, $dateTo, null);
 
             // Make forecast context-aware when dashboard/statistics filters are active.
-            $response = $this->applyFilterContextScaling($response, $month, $year, $crimeType);
+            $response = $this->applyFilterContextScaling($response, $month, $year, null);
 
             // Real-time online adjustment using fresh submitted reports.
             // This keeps forecasts responsive when new reports arrive between retraining windows.
-            $response = $this->applyLiveReportAdjustment($response, $crimeType);
+            $response = $this->applyLiveReportAdjustment($response, null);
+
+            // Finally derive selected crime-type forecast from adjusted all-crimes baseline.
+            $response = $this->applyCrimeTypeShareScaling($response, $crimeType, $month, $year);
             $response['filter'] = ['month' => $month, 'year' => $year, 'date_from' => $dateFrom, 'date_to' => $dateTo];
             
             return response()->json($response);
@@ -376,25 +376,25 @@ class StatisticsController extends Controller
         }
 
         try {
-            $typeHistory = $this->getCombinedHistoricalByCrimeType($crimeType, $month, $year);
-            $typeAvg = collect($typeHistory)
-                ->pluck('count')
-                ->map(fn($v) => floatval($v))
-                ->filter(fn($v) => is_finite($v) && $v >= 0)
-                ->avg();
+            $stats = $this->_getCrimeStats($month, $year);
+            $byType = collect($stats['byType'] ?? []);
+            $total = $byType->sum(function ($row) {
+                return floatval($row['count'] ?? 0);
+            });
 
-            $allHistory = $this->_getCrimeStats($month, $year)['monthly'] ?? [];
-            $allAvg = collect($allHistory)
-                ->pluck('count')
-                ->map(fn($v) => floatval($v))
-                ->filter(fn($v) => is_finite($v) && $v > 0)
-                ->avg();
-
-            if (!$allAvg || $allAvg <= 0) {
+            if ($total <= 0) {
                 return $response;
             }
 
-            $ratio = ($typeAvg ?? 0) / $allAvg;
+            $selected = $byType
+                ->filter(function ($row) use ($crimeType) {
+                    return strtoupper(trim((string)($row['type'] ?? ''))) === strtoupper(trim((string)$crimeType));
+                })
+                ->sum(function ($row) {
+                    return floatval($row['count'] ?? 0);
+                });
+
+            $ratio = $selected / $total;
             // keep realistic proportions so lines remain visible but distinctly per-crime
             $ratio = max(0.02, min(0.95, $ratio));
 
