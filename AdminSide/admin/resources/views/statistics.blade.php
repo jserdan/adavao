@@ -1401,15 +1401,15 @@ function renderForecastBreakdown() {
         const historicalAvg = (parseInt(d.count) || 0) / totalMonths;
         const changePct = historicalAvg > 0 ? ((projectedAvg - historicalAvg) / historicalAvg * 100) : 0;
         // Per-crime trend within the forecast horizon
-        const projFirstHalf = firstHalfAvg * pct;
-        const projSecondHalf = secondHalfAvg * pct;
+        const projFirstHalf = (singleCrimeMode && typeName === selectedCrime) ? firstHalfAvg : (firstHalfAvg * pct);
+        const projSecondHalf = (singleCrimeMode && typeName === selectedCrime) ? secondHalfAvg : (secondHalfAvg * pct);
         const internalTrendPct = projFirstHalf > 0 ? ((projSecondHalf - projFirstHalf) / projFirstHalf * 100) : 0;
 
         return {
             type: d.type,
             historicalCount: parseInt(d.count) || 0,
             historicalAvg: historicalAvg,
-            pctOfTotal: pct * 100,
+            pctOfTotal: (singleCrimeMode && typeName === selectedCrime) ? 100 : (pct * 100),
             projectedTotal: projectedTotal,
             projectedAvg: projectedAvg,
             changePct: changePct,
@@ -1706,6 +1706,9 @@ function renderTrendChart(historical, forecast) {
                             return `${context.dataset.label}: ${Math.round(context.parsed.y)} crimes`;
                         },
                         afterBody: function(tooltipItems) {
+                            const selectedCrime = (document.getElementById('crimeTypeFilter')?.value || '').trim();
+                            if (selectedCrime) return [];
+
                             // Show crime type breakdown when hovering on a forecast point
                             const forecastItem = tooltipItems.find(t => t.dataset.label === 'SARIMA Forecast' && t.parsed.y !== null);
                             if (!forecastItem || !crimeStats?.byType?.length) return [];

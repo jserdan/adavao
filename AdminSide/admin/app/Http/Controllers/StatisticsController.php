@@ -133,9 +133,9 @@ class StatisticsController extends Controller
             // Ensure API is running
             $this->autoStartSarimaApi();
             
-            // Get base all-crimes response from API (scalable)
-            // Crime-specific view is derived consistently from this base forecast.
-            $apiResponse = $this->_getForecast($horizon, null);
+            // Get forecast directly from SARIMA API for the active scope.
+            // If crime_type is selected, the API returns that specific crime model output.
+            $apiResponse = $this->_getForecast($horizon, $crimeType ?: null);
             
             // Base response structure
             $response = [
@@ -170,18 +170,22 @@ class StatisticsController extends Controller
             }
 
             // Dashboard date-range context (date_from/date_to)
-            $response = $this->applyDateRangeContextScaling($response, $dateFrom, $dateTo, null);
+            $response = $this->applyDateRangeContextScaling($response, $dateFrom, $dateTo, $crimeType);
 
             // Make forecast context-aware when dashboard/statistics filters are active.
-            $response = $this->applyFilterContextScaling($response, $month, $year, null);
+            $response = $this->applyFilterContextScaling($response, $month, $year, $crimeType);
 
             // Real-time online adjustment using fresh submitted reports.
             // This keeps forecasts responsive when new reports arrive between retraining windows.
-            $response = $this->applyLiveReportAdjustment($response, null);
+            $response = $this->applyLiveReportAdjustment($response, $crimeType);
 
-            // Finally derive selected crime-type forecast from adjusted all-crimes baseline.
-            $response = $this->applyCrimeTypeShareScaling($response, $crimeType, $month, $year);
-            $response['filter'] = ['month' => $month, 'year' => $year, 'date_from' => $dateFrom, 'date_to' => $dateTo];
+            $response['filter'] = [
+                'month' => $month,
+                'year' => $year,
+                'date_from' => $dateFrom,
+                'date_to' => $dateTo,
+                'crime_type' => $crimeType,
+            ];
             
             return response()->json($response);
         } catch (\Exception $e) {
