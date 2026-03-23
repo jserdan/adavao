@@ -380,7 +380,10 @@ class DispatchController extends Controller
         FROM users_public u
         LEFT JOIN police_stations ps ON u.assigned_station_id = ps.station_id
         LEFT JOIN patrol_locations pl ON u.id = pl.user_id
-        WHERE LOWER(COALESCE(u.user_role::text, u.role::text, '')) = 'patrol_officer'
+        WHERE (
+            LOWER(REPLACE(COALESCE(u.user_role::text, u.role::text, ''), ' ', '_')) = 'patrol_officer'
+            OR LOWER(COALESCE(u.email, '')) LIKE 'ps%.patrol@alertdavao.local'
+        )
         ORDER BY pl.updated_at DESC NULLS LAST, u.lastname ASC, u.firstname ASC
     ");
 

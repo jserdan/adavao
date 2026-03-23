@@ -22,14 +22,18 @@ class PatrolOfficerSeeder extends Seeder
 
         $stations = DB::table('police_stations')
             ->select('station_id', 'station_name')
-            ->where('station_name', 'LIKE', 'PS%')
+            ->whereRaw("LOWER(COALESCE(station_name, '')) NOT LIKE ?", ['%cybercrime%'])
+            ->orderBy('station_id')
             ->get()
             ->sortBy(function ($station) {
-                if (preg_match('/^PS\s*(\d+)/i', (string) $station->station_name, $matches)) {
+                if (preg_match('/\bPS\s*(\d+)\b/i', (string) $station->station_name, $matches)) {
+                    return (int) $matches[1];
+                }
+                if (preg_match('/\bstation\s*(\d+)\b/i', (string) $station->station_name, $matches)) {
                     return (int) $matches[1];
                 }
 
-                return PHP_INT_MAX;
+                return (int) $station->station_id;
             })
             ->values();
 
@@ -40,8 +44,15 @@ class PatrolOfficerSeeder extends Seeder
 
         $patrolOfficers = [];
         foreach ($stations as $index => $station) {
-            preg_match('/^PS\s*(\d+)/i', (string) $station->station_name, $matches);
-            $psNumber = isset($matches[1]) ? (int) $matches[1] : ($index + 1);
+            $psNumber = null;
+            if (preg_match('/\bPS\s*(\d+)\b/i', (string) $station->station_name, $matches)) {
+                $psNumber = (int) $matches[1];
+            } elseif (preg_match('/\bstation\s*(\d+)\b/i', (string) $station->station_name, $matches)) {
+                $psNumber = (int) $matches[1];
+            }
+            if ($psNumber === null || $psNumber <= 0) {
+                $psNumber = (int) $station->station_id;
+            }
             $psCode = str_pad((string) $psNumber, 2, '0', STR_PAD_LEFT);
 
             $patrolOfficers[] = [
