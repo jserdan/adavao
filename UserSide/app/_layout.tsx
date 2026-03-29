@@ -17,8 +17,7 @@ import NetworkBanner from '../components/NetworkBanner';
 import { UserProvider } from '../contexts/UserContext';
 import { LoadingProvider, useLoading } from '../contexts/LoadingContext';
 import { inactivityManager } from '../services/inactivityManager';
-// KEEP-ALIVE: Import commented out — re-enable to restore server warmup/self-ping
-// import { startServerWarmup, stopServerWarmup, pingServer } from '../utils/serverWarmup';
+import { startServerWarmup, stopServerWarmup, pingServer } from '../utils/serverWarmup';
 import { createSseConnection } from '../services/sseService';
 
 // Prevent auto-hiding splash screen
@@ -36,8 +35,8 @@ export default function RootLayout() {
         // This ensures the custom animation is visible
         await SplashScreen.hideAsync();
 
-        // KEEP-ALIVE: Initial ping on app launch — commented out
-        // pingServer();
+        // Start warming up the server immediately (non-blocking)
+        pingServer();
 
         // Preload fonts to prevent FontFaceObserver timeout
         await Font.loadAsync({
@@ -101,12 +100,12 @@ function AppContent() {
     };
     checkAndStartInactivity();
 
-    // KEEP-ALIVE: Periodic warmup pings — commented out
-    // startServerWarmup();
+    // Start server warmup to prevent cold start delays
+    startServerWarmup();
 
     return () => {
       inactivityManager.stop();
-      // stopServerWarmup(); // KEEP-ALIVE: stop warmup on unmount — commented out
+      stopServerWarmup();
     };
   }, []);
 

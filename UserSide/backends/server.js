@@ -982,8 +982,8 @@ const { runMigrations } = require('./runMigrations');
     // Duplicated app.listen logic removed
 
     // 🔄 KEEP-ALIVE (SELF-PING)
-    // Disabled by default. Set KEEP_ALIVE_ENABLED=true to re-enable.
-    const KEEP_ALIVE_ENABLED = String(process.env.KEEP_ALIVE_ENABLED || 'false').toLowerCase() === 'true';
+    // Enabled by default. Set KEEP_ALIVE_ENABLED=false to disable.
+    const KEEP_ALIVE_ENABLED = String(process.env.KEEP_ALIVE_ENABLED || 'true').toLowerCase() === 'true';
 
     if (KEEP_ALIVE_ENABLED) {
       // Pings UserSide, AdminSide, and SARIMA API endpoints every interval
