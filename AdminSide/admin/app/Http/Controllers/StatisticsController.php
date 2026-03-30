@@ -444,8 +444,12 @@ class StatisticsController extends Controller
             $prevEnd = $start->copy()->subDay()->endOfDay();
             $prevStart = $prevEnd->copy()->subDays($days - 1)->startOfDay();
 
+            // Treat unset validity as usable report context; only exclude explicit invalid reports.
             $baseQuery = DB::table('reports')
-                ->where('is_valid', self::REPORT_VALID);
+                ->where(function ($q) {
+                    $q->whereNull('is_valid')
+                      ->orWhere('is_valid', '!=', self::REPORT_INVALID);
+                });
 
             if (!empty($crimeType)) {
                 $baseQuery->whereRaw("UPPER(COALESCE(report_type::text, '')) LIKE ?", ['%' . strtoupper($crimeType) . '%']);
@@ -500,7 +504,10 @@ class StatisticsController extends Controller
             }
 
             $q = DB::table('reports')
-                ->where('is_valid', self::REPORT_VALID)
+                ->where(function ($query) {
+                    $query->whereNull('is_valid')
+                          ->orWhere('is_valid', '!=', self::REPORT_INVALID);
+                })
                 ->whereBetween('created_at', [$start, $end]);
 
             if (!empty($crimeType)) {
