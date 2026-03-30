@@ -923,6 +923,19 @@
     const dashboardDateFrom = @json($dateFrom ?? null);
     const dashboardDateTo = @json($dateTo ?? null);
 
+    function getNormalizedDashboardDates() {
+        let from = dashboardDateFrom ? String(dashboardDateFrom) : null;
+        let to = dashboardDateTo ? String(dashboardDateTo) : null;
+
+        if (from && to && from > to) {
+            const tmp = from;
+            from = to;
+            to = tmp;
+        }
+
+        return { from, to };
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
         if(document.getElementById('forecast-content')) {
             setTimeout(fetchForecast, 1000); // Small delay to allow UI to settle
@@ -986,12 +999,12 @@
     function fetchForecast() {
         // Fetch forecast for next 1 month
         const params = new URLSearchParams({ horizon: '1' });
-        const hasDashboardFilter = !!(dashboardDateFrom || dashboardDateTo);
-        const targetMonth = String(dashboardDateTo || dashboardDateFrom || '').substring(0, 7);
+        const { from: normalizedFrom, to: normalizedTo } = getNormalizedDashboardDates();
+        const hasDashboardFilter = !!(normalizedFrom || normalizedTo);
 
         // Apply dashboard date range filter to AI insight context (exact dates).
-        if (dashboardDateFrom) params.set('date_from', String(dashboardDateFrom));
-        if (dashboardDateTo) params.set('date_to', String(dashboardDateTo));
+        if (normalizedFrom) params.set('date_from', normalizedFrom);
+        if (normalizedTo) params.set('date_to', normalizedTo);
 
         fetch('/api/statistics/forecast?' + params.toString())
             .then(response => response.json())
@@ -1010,10 +1023,6 @@
                     let rawValue = 0;
                     if (Array.isArray(data.data) && data.data.length > 0) {
                         let item = data.data[0];
-                        if (targetMonth) {
-                            const matched = forecastPoints.find(p => String(p?.date || '').substring(0, 7) === targetMonth);
-                            if (matched) item = matched;
-                        }
                         // Extract forecast value from the ForecastItem object
                         if (typeof item === 'object' && item !== null && item.forecast !== undefined) {
                             rawValue = item.forecast;
@@ -1028,15 +1037,15 @@
 
                     let predictedValue = Math.round(parseFloat(rawValue));
 
-                    // Make AI highlight responsive to dashboard date filter using filtered historical context.
-                    // Heavily weight filtered historical average when dashboard filter is active.
+                    // For dashboard date-filter mode, prioritize filtered historical context so
+                    // cross-year date ranges produce visibly different values.
                     if (hasDashboardFilter && Array.isArray(data.historical) && data.historical.length > 0) {
                         const histValues = data.historical
                             .map(h => parseFloat(h?.count ?? h?.value ?? 0))
                             .filter(v => Number.isFinite(v));
-                        if (histValues.length > 0 && Number.isFinite(predictedValue)) {
+                        if (histValues.length > 0) {
                             const histAvg = histValues.reduce((a, b) => a + b, 0) / histValues.length;
-                            predictedValue = Math.round((predictedValue * 0.2) + (histAvg * 0.8));
+                            predictedValue = Math.round(histAvg);
                         }
                     }
                     
@@ -1235,7 +1244,12 @@
     
     // Function to load reports from API
     function loadMiniMapReports(filters = {}) {
-        const params = new URLSearchParams(filters).toString();
+        const { from: normalizedFrom, to: normalizedTo } = getNormalizedDashboardDates();
+        const effectiveFilters = { ...filters };
+        if (normalizedFrom) effectiveFilters.date_from = normalizedFrom;
+        if (normalizedTo) effectiveFilters.date_to = normalizedTo;
+
+        const params = new URLSearchParams(effectiveFilters).toString();
         const url = '{{ route("api.reports") }}' + (params ? '?' + params : '');
         
         console.log('Loading mini map reports from:', url);

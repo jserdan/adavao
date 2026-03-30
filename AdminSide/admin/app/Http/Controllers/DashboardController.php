@@ -17,6 +17,9 @@ class DashboardController extends Controller
         // Item #15: Date Range Filtering
         $dateFrom = $request->input('date_from');
         $dateTo = $request->input('date_to');
+        if ($dateFrom && $dateTo && $dateFrom > $dateTo) {
+            [$dateFrom, $dateTo] = [$dateTo, $dateFrom];
+        }
         
         // Determine role using RBAC methods
         $userRole = 'guest';
