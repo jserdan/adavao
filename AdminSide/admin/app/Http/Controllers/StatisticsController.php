@@ -519,14 +519,25 @@ class StatisticsController extends Controller
                 ->orderBy('ym', 'asc')
                 ->get();
 
-            return collect($rows)->map(function ($row) {
-                [$y, $m] = explode('-', strval($row->ym));
-                return [
-                    'year' => intval($y),
-                    'month' => intval($m),
-                    'count' => intval($row->c),
+            $countsByMonth = collect($rows)->mapWithKeys(function ($row) {
+                return [strval($row->ym) => intval($row->c)];
+            });
+
+            $monthlySeries = [];
+            $cursor = $start->copy()->startOfMonth();
+            $last = $end->copy()->startOfMonth();
+
+            while ($cursor->lte($last)) {
+                $ym = $cursor->format('Y-m');
+                $monthlySeries[] = [
+                    'year' => intval($cursor->format('Y')),
+                    'month' => intval($cursor->format('m')),
+                    'count' => intval($countsByMonth->get($ym, 0)),
                 ];
-            })->values()->all();
+                $cursor->addMonth();
+            }
+
+            return $monthlySeries;
         } catch (\Throwable $e) {
             return [];
         }
