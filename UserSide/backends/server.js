@@ -981,7 +981,9 @@ const { runMigrations } = require('./runMigrations');
 
     // Duplicated app.listen logic removed
 
+    /*
     // 🔄 KEEP-ALIVE (SELF-PING)
+    // Temporarily disabled by commenting out this entire block.
     // Enabled by default. Set KEEP_ALIVE_ENABLED=false to disable.
     const KEEP_ALIVE_ENABLED = String(process.env.KEEP_ALIVE_ENABLED || 'true').toLowerCase() === 'true';
 
@@ -1042,6 +1044,7 @@ const { runMigrations } = require('./runMigrations');
     } else {
       console.log('ℹ️ Keep-alive self-ping disabled (KEEP_ALIVE_ENABLED is not true).');
     }
+    */
   });
 
   // Init Socket.io
