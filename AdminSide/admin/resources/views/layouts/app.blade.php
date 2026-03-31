@@ -449,6 +449,15 @@
                             View Map
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a href="{{ route('decryption-tester') }}" class="nav-link {{ request()->routeIs('decryption-tester') || request()->routeIs('decryption-tester.decrypt') ? 'active' : '' }}">
+                            <svg class="nav-icon" viewBox="0 0 24 24">
+                                <rect x="3" y="11" width="18" height="10" rx="2" ry="2"/>
+                                <path d="M7 11V8a5 5 0 0 1 10 0v3"/>
+                            </svg>
+                            Decryption Tester
+                        </a>
+                    </li>
                     @endif
                 </ul>
             </nav>

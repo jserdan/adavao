@@ -18,6 +18,7 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\HotspotDataController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\AnnouncementController;
+use App\Http\Controllers\DecryptionTesterController;
 
 
 // Temporary route to force migration on Render
@@ -309,6 +310,12 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/api/statistics/monthly-warning', [StatisticsController::class, 'getMonthlyCrimeWarning'])->name('statistics.monthlyWarning');
 
     Route::get('/view-map', [MapController::class, 'index'])->name('view-map');
+    Route::get('/decryption-tester', [DecryptionTesterController::class, 'index'])
+        ->name('decryption-tester')
+        ->middleware('role:admin');
+    Route::post('/decryption-tester/decrypt', [DecryptionTesterController::class, 'decrypt'])
+        ->name('decryption-tester.decrypt')
+        ->middleware('role:admin');
     Route::get('/api/reports', [MapController::class, 'getReports'])->middleware('api.cache')->name('api.reports');
     Route::get('/api/csv-crime-data', [MapController::class, 'getCsvCrimeData'])->middleware('api.cache')->name('api.csv-crimes');
     Route::post('/api/clear-map-cache', [MapController::class, 'clearCache'])->name('api.clear-map-cache');
