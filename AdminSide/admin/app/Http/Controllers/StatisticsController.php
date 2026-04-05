@@ -467,8 +467,32 @@ class StatisticsController extends Controller
                 ->whereBetween($incidentDateExpr, [$prevStart, $prevEnd])
                 ->count();
 
-            $multiplier = $prevCount > 0 ? ($currentCount / $prevCount) : ($currentCount > 0 ? 1.2 : 1.0);
-            $multiplier = max(0.40, min(2.50, $multiplier));
+            // Build a stable baseline from recent history so each new range filter
+            // produces a context-specific multiplier (instead of a flat fallback).
+            $baselineEnd = $end->copy();
+            $baselineStart = $baselineEnd->copy()->subMonths(12)->startOfDay();
+
+            $baselineCount = (clone $baseQuery)
+                ->whereBetween($incidentDateExpr, [$baselineStart, $baselineEnd])
+                ->count();
+
+            $baselineDays = max(1, $baselineStart->diffInDays($baselineEnd) + 1);
+            $currentDailyRate = $currentCount / $days;
+            $baselineDailyRate = $baselineCount / $baselineDays;
+
+            if ($baselineDailyRate <= 0) {
+                // If baseline has no activity, use current intensity directly.
+                $intensityMultiplier = $currentDailyRate > 0 ? 1.35 : 1.0;
+            } else {
+                $intensityMultiplier = $currentDailyRate / $baselineDailyRate;
+            }
+
+            // Momentum from immediately preceding window (if available).
+            $trendMultiplier = $prevCount > 0 ? ($currentCount / $prevCount) : 1.0;
+
+            // Blend intensity + trend to avoid static values across successive filters.
+            $multiplier = ($intensityMultiplier * 0.70) + ($trendMultiplier * 0.30);
+            $multiplier = max(0.30, min(3.00, $multiplier));
 
             $adjusted = [];
             foreach ($response['data'] as $point) {
@@ -489,6 +513,11 @@ class StatisticsController extends Controller
                 'to' => $end->toDateString(),
                 'current_count' => $currentCount,
                 'previous_count' => $prevCount,
+                'baseline_count_12m' => $baselineCount,
+                'current_daily_rate' => round($currentDailyRate, 4),
+                'baseline_daily_rate' => round($baselineDailyRate, 4),
+                'intensity_multiplier' => round($intensityMultiplier, 3),
+                'trend_multiplier' => round($trendMultiplier, 3),
                 'multiplier' => round($multiplier, 3),
             ];
         } catch (\Throwable $e) {
