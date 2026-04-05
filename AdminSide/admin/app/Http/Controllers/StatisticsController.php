@@ -457,14 +457,13 @@ class StatisticsController extends Controller
 
             // Use incident date when available so dashboard date filters reflect reported crime dates,
             // not only record insertion timestamps.
-            $incidentDateExpr = DB::raw("COALESCE(date_reported::timestamp, created_at)");
-
+            
             $currentCount = (clone $baseQuery)
-                ->whereBetween($incidentDateExpr, [$start, $end])
+                ->whereRaw("COALESCE(date_reported, created_at) BETWEEN ? AND ?", [$start, $end])
                 ->count();
 
             $prevCount = (clone $baseQuery)
-                ->whereBetween($incidentDateExpr, [$prevStart, $prevEnd])
+                ->whereRaw("COALESCE(date_reported, created_at) BETWEEN ? AND ?", [$prevStart, $prevEnd])
                 ->count();
 
             // Build a stable baseline from recent history so each new range filter
@@ -473,7 +472,7 @@ class StatisticsController extends Controller
             $baselineStart = $baselineEnd->copy()->subMonths(12)->startOfDay();
 
             $baselineCount = (clone $baseQuery)
-                ->whereBetween($incidentDateExpr, [$baselineStart, $baselineEnd])
+                ->whereRaw("COALESCE(date_reported, created_at) BETWEEN ? AND ?", [$baselineStart, $baselineEnd])
                 ->count();
 
             $baselineDays = max(1, $baselineStart->diffInDays($baselineEnd) + 1);
@@ -541,13 +540,13 @@ class StatisticsController extends Controller
                     $query->whereNull('is_valid')
                           ->orWhere('is_valid', '!=', self::REPORT_INVALID);
                 })
-                ->whereBetween(DB::raw("COALESCE(date_reported::timestamp, created_at)"), [$start, $end]);
+                ->whereRaw("COALESCE(date_reported, created_at) BETWEEN ? AND ?", [$start, $end]);
 
             if (!empty($crimeType)) {
                 $q->whereRaw("UPPER(COALESCE(report_type::text, '')) LIKE ?", ['%' . strtoupper($crimeType) . '%']);
             }
 
-            $rows = $q->selectRaw("to_char(COALESCE(date_reported::timestamp, created_at), 'YYYY-MM') as ym, COUNT(*) as c")
+            $rows = $q->selectRaw("to_char(COALESCE(date_reported, created_at), 'YYYY-MM') as ym, COUNT(*) as c")
                 ->groupBy('ym')
                 ->orderBy('ym', 'asc')
                 ->get();
