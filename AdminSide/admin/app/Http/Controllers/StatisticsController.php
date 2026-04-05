@@ -455,12 +455,16 @@ class StatisticsController extends Controller
                 $baseQuery->whereRaw("UPPER(COALESCE(report_type::text, '')) LIKE ?", ['%' . strtoupper($crimeType) . '%']);
             }
 
+            // Use incident date when available so dashboard date filters reflect reported crime dates,
+            // not only record insertion timestamps.
+            $incidentDateExpr = DB::raw("COALESCE(date_reported::timestamp, created_at)");
+
             $currentCount = (clone $baseQuery)
-                ->whereBetween('created_at', [$start, $end])
+                ->whereBetween($incidentDateExpr, [$start, $end])
                 ->count();
 
             $prevCount = (clone $baseQuery)
-                ->whereBetween('created_at', [$prevStart, $prevEnd])
+                ->whereBetween($incidentDateExpr, [$prevStart, $prevEnd])
                 ->count();
 
             $multiplier = $prevCount > 0 ? ($currentCount / $prevCount) : ($currentCount > 0 ? 1.2 : 1.0);
@@ -508,13 +512,13 @@ class StatisticsController extends Controller
                     $query->whereNull('is_valid')
                           ->orWhere('is_valid', '!=', self::REPORT_INVALID);
                 })
-                ->whereBetween('created_at', [$start, $end]);
+                ->whereBetween(DB::raw("COALESCE(date_reported::timestamp, created_at)"), [$start, $end]);
 
             if (!empty($crimeType)) {
                 $q->whereRaw("UPPER(COALESCE(report_type::text, '')) LIKE ?", ['%' . strtoupper($crimeType) . '%']);
             }
 
-            $rows = $q->selectRaw("to_char(created_at, 'YYYY-MM') as ym, COUNT(*) as c")
+            $rows = $q->selectRaw("to_char(COALESCE(date_reported::timestamp, created_at), 'YYYY-MM') as ym, COUNT(*) as c")
                 ->groupBy('ym')
                 ->orderBy('ym', 'asc')
                 ->get();

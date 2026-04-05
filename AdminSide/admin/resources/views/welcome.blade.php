@@ -1037,18 +1037,6 @@
 
                     let predictedValue = Math.round(parseFloat(rawValue));
 
-                    // For dashboard date-filter mode, prioritize filtered historical context so
-                    // cross-year date ranges produce visibly different values.
-                    if (hasDashboardFilter && Array.isArray(data.historical) && data.historical.length > 0) {
-                        const histValues = data.historical
-                            .map(h => parseFloat(h?.count ?? h?.value ?? 0))
-                            .filter(v => Number.isFinite(v));
-                        if (histValues.length > 0) {
-                            const histAvg = histValues.reduce((a, b) => a + b, 0) / histValues.length;
-                            predictedValue = Math.round(histAvg);
-                        }
-                    }
-                    
                     if(isNaN(predictedValue)) {
                         console.error('Forecast value is NaN. Raw:', rawValue, 'Data:', data);
                         throw new Error('Invalid forecast value');
