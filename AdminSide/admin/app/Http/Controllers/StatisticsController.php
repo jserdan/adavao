@@ -493,9 +493,18 @@ class StatisticsController extends Controller
             }
 
             // Blend intensity + trend to avoid static values across successive filters.
-            $multiplier = ($intensityMultiplier * 0.70) + ($trendMultiplier * 0.30);
-            // Allow multiplier to drop to zero if there truly is 0 matching data.
-            $multiplier = max(0.00, min(3.00, $multiplier));
+            $rawMultiplier = ($intensityMultiplier * 0.70) + ($trendMultiplier * 0.30);
+
+            // Use soft-capping above 3.0 to preserve differences between wide date ranges
+            // (hard-clamping at 3.0 was flattening many filters to exactly the same value).
+            if ($rawMultiplier > 3.00) {
+                $multiplier = 3.00 + log(1 + ($rawMultiplier - 3.00), 2);
+            } else {
+                $multiplier = $rawMultiplier;
+            }
+
+            // Allow true zero, but keep a practical upper bound to avoid runaway spikes.
+            $multiplier = max(0.00, min(8.00, $multiplier));
 
             $adjusted = [];
             foreach ($response['data'] as $point) {
@@ -521,6 +530,7 @@ class StatisticsController extends Controller
                 'baseline_daily_rate' => round($baselineDailyRate, 4),
                 'intensity_multiplier' => round($intensityMultiplier, 3),
                 'trend_multiplier' => round($trendMultiplier, 3),
+                'raw_multiplier' => round($rawMultiplier, 3),
                 'multiplier' => round($multiplier, 3),
             ];
         } catch (\Throwable $e) {

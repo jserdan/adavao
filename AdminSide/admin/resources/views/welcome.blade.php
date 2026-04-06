@@ -741,14 +741,14 @@
         @endif
 
         <!-- ITEM 15: DATE RANGE FILTER -->
-        <form action="{{ route('dashboard') }}" method="GET" style="display: flex; gap: 0.5rem; align-items: center; background: white; padding: 0.5rem; border: 1px solid #e5e7eb; border-radius: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+        <form id="dashboardDateFilterForm" action="{{ route('dashboard') }}" method="GET" style="display: flex; gap: 0.5rem; align-items: center; background: white; padding: 0.5rem; border: 1px solid #e5e7eb; border-radius: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
             <div style="display: flex; flex-direction: column;">
                 <label style="font-size: 0.65rem; color: #6b7280; font-weight: 700; text-transform: uppercase;">From</label>
-                <input type="date" name="date_from" value="{{ $dateFrom ?? '' }}" style="border: 1px solid #d1d5db; border-radius: 4px; padding: 2px 4px; font-size: 0.8rem; color: #374151;">
+                <input id="dashboard-date-from" type="date" name="date_from" value="{{ $dateFrom ?? '' }}" style="border: 1px solid #d1d5db; border-radius: 4px; padding: 2px 4px; font-size: 0.8rem; color: #374151;">
             </div>
             <div style="display: flex; flex-direction: column;">
                 <label style="font-size: 0.65rem; color: #6b7280; font-weight: 700; text-transform: uppercase;">To</label>
-                <input type="date" name="date_to" value="{{ $dateTo ?? '' }}" style="border: 1px solid #d1d5db; border-radius: 4px; padding: 2px 4px; font-size: 0.8rem; color: #374151;">
+                <input id="dashboard-date-to" type="date" name="date_to" value="{{ $dateTo ?? '' }}" style="border: 1px solid #d1d5db; border-radius: 4px; padding: 2px 4px; font-size: 0.8rem; color: #374151;">
             </div>
             <button type="submit" style="background: #3b82f6; color: white; border: none; padding: 0 1rem; border-radius: 6px; font-weight: 600; font-size: 0.8rem; cursor: pointer; margin-left: 0.5rem; height: 38px; transition: background 0.2s;">Filter</button>
             @if(request('date_from') || request('date_to'))
@@ -922,10 +922,46 @@
 <script>
     const dashboardDateFrom = @json($dateFrom ?? null);
     const dashboardDateTo = @json($dateTo ?? null);
+    const DASHBOARD_DATE_FILTER_STORAGE_KEY = 'dashboardDateFilterV1';
+
+    function normalizeIsoDate(raw) {
+        if (!raw) return null;
+        const value = String(raw).trim();
+        return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null;
+    }
+
+    function readStoredDashboardDates() {
+        try {
+            const raw = localStorage.getItem(DASHBOARD_DATE_FILTER_STORAGE_KEY);
+            if (!raw) return { from: null, to: null };
+            const parsed = JSON.parse(raw);
+            return {
+                from: normalizeIsoDate(parsed?.from),
+                to: normalizeIsoDate(parsed?.to),
+            };
+        } catch (_) {
+            return { from: null, to: null };
+        }
+    }
+
+    function persistDashboardDates(from, to) {
+        try {
+            localStorage.setItem(
+                DASHBOARD_DATE_FILTER_STORAGE_KEY,
+                JSON.stringify({
+                    from: normalizeIsoDate(from),
+                    to: normalizeIsoDate(to),
+                })
+            );
+        } catch (_) {
+            // Ignore localStorage errors in restrictive browsers.
+        }
+    }
 
     function getNormalizedDashboardDates() {
-        let from = dashboardDateFrom ? String(dashboardDateFrom) : null;
-        let to = dashboardDateTo ? String(dashboardDateTo) : null;
+        const stored = readStoredDashboardDates();
+        let from = normalizeIsoDate(dashboardDateFrom) || stored.from;
+        let to = normalizeIsoDate(dashboardDateTo) || stored.to;
 
         if (from && to && from > to) {
             const tmp = from;
@@ -937,6 +973,28 @@
     }
 
     document.addEventListener('DOMContentLoaded', function() {
+        const dateForm = document.getElementById('dashboardDateFilterForm');
+        const fromInput = document.getElementById('dashboard-date-from');
+        const toInput = document.getElementById('dashboard-date-to');
+
+        if (dateForm && fromInput && toInput) {
+            // Persist filter values so accidental page navigation doesn't silently drop context.
+            dateForm.addEventListener('submit', function () {
+                persistDashboardDates(fromInput.value || null, toInput.value || null);
+            });
+
+            // If the backend opened without query params, repopulate UI from stored values.
+            if (!normalizeIsoDate(dashboardDateFrom) && !normalizeIsoDate(dashboardDateTo)) {
+                const stored = readStoredDashboardDates();
+                if (stored.from && !fromInput.value) fromInput.value = stored.from;
+                if (stored.to && !toInput.value) toInput.value = stored.to;
+            }
+        }
+
+        // Keep stored values synced with server-provided active filter.
+        const normalizedOnLoad = getNormalizedDashboardDates();
+        persistDashboardDates(normalizedOnLoad.from, normalizedOnLoad.to);
+
         if(document.getElementById('forecast-content')) {
             setTimeout(fetchForecast, 1000); // Small delay to allow UI to settle
         }
