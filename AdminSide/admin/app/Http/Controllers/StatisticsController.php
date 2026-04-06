@@ -341,13 +341,13 @@ class StatisticsController extends Controller
 
             if ($baseAvg <= 0) {
                 // If base is strictly 0 across all history (maybe impossible, but edge case), assume zero forecast.
-                $multiplier = $scopeAvg > 0 ? 1.5 : 0.05;
+                $multiplier = $scopeAvg > 0 ? 1.5 : 0.00;
             } else {
                 $multiplier = $scopeAvg / $baseAvg;
             }
 
             // Allow the multiplier to reflect near-zero conditions properly
-            $multiplier = max(0.01, min(2.50, $multiplier));
+            $multiplier = max(0.00, min(2.50, $multiplier));
 
             $adjusted = [];
             foreach ($response['data'] as $point) {
@@ -484,8 +484,8 @@ class StatisticsController extends Controller
             $baselineDailyRate = $baselineCount / $baselineDays;
 
             if ($baselineDailyRate <= 0) {
-                // If baseline has no activity, and currently no activity, it should predict near zero.
-                $intensityMultiplier = $currentDailyRate > 0 ? 1.35 : 0.05;
+                // If baseline has no activity, and currently no activity, it should predict zero.
+                $intensityMultiplier = $currentDailyRate > 0 ? 1.35 : 0.00;
             } else {
                 $intensityMultiplier = $currentDailyRate / $baselineDailyRate;
             }
@@ -495,13 +495,13 @@ class StatisticsController extends Controller
                 $trendMultiplier = $currentCount / $prevCount;
             } else {
                 // If there was no activity previously, and none now, trend is flat near zero
-                $trendMultiplier = $currentCount > 0 ? 1.5 : 0.05;
+                $trendMultiplier = $currentCount > 0 ? 1.5 : 0.00;
             }
 
             // Blend intensity + trend to avoid static values across successive filters.
             $multiplier = ($intensityMultiplier * 0.70) + ($trendMultiplier * 0.30);
-            // Allow multiplier to drop very low if there truly is 0 matching data.
-            $multiplier = max(0.01, min(3.00, $multiplier));
+            // Allow multiplier to drop to zero if there truly is 0 matching data.
+            $multiplier = max(0.00, min(3.00, $multiplier));
 
             $adjusted = [];
             foreach ($response['data'] as $point) {
