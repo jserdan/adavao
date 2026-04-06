@@ -454,36 +454,24 @@ class StatisticsController extends Controller
             $prevEnd = $start->copy()->subDay()->endOfDay();
             $prevStart = $prevEnd->copy()->subDays($days - 1)->startOfDay();
 
-            // Treat unset validity as usable report context; only exclude explicit invalid reports.
-            $baseQuery = DB::table('reports')
-                ->where(function ($q) {
-                    $q->whereNull('is_valid')
-                      ->orWhere('is_valid', '!=', self::REPORT_INVALID);
-                });
+            // Use the same context source as charts/insights (CSV + validated DB reports),
+            // so historical date ranges don't collapse to zero just because DB-only reports are sparse.
+            $currentCount = $this->sumMonthlyCounts(
+                $this->getDateRangeMonthlyReports($start->toDateString(), $end->toDateString(), $crimeType)
+            );
 
-            if (!empty($crimeType)) {
-                $baseQuery->whereRaw("UPPER(COALESCE(report_type::text, '')) LIKE ?", ['%' . strtoupper($crimeType) . '%']);
-            }
-
-            // Use incident date when available so dashboard date filters reflect reported crime dates,
-            // not only record insertion timestamps.
-            
-            $currentCount = (clone $baseQuery)
-                ->whereRaw("COALESCE(date_reported::timestamp, created_at::timestamp) BETWEEN ?::timestamp AND ?::timestamp", [$start, $end])
-                ->count();
-
-            $prevCount = (clone $baseQuery)
-                ->whereRaw("COALESCE(date_reported::timestamp, created_at::timestamp) BETWEEN ?::timestamp AND ?::timestamp", [$prevStart, $prevEnd])
-                ->count();
+            $prevCount = $this->sumMonthlyCounts(
+                $this->getDateRangeMonthlyReports($prevStart->toDateString(), $prevEnd->toDateString(), $crimeType)
+            );
 
             // Build a stable baseline from recent history so each new range filter
             // produces a context-specific multiplier (instead of a flat fallback).
             $baselineEnd = $end->copy();
             $baselineStart = $baselineEnd->copy()->subMonths(12)->startOfDay();
 
-            $baselineCount = (clone $baseQuery)
-                ->whereRaw("COALESCE(date_reported::timestamp, created_at::timestamp) BETWEEN ?::timestamp AND ?::timestamp", [$baselineStart, $baselineEnd])
-                ->count();
+            $baselineCount = $this->sumMonthlyCounts(
+                $this->getDateRangeMonthlyReports($baselineStart->toDateString(), $baselineEnd->toDateString(), $crimeType)
+            );
 
             $baselineDays = max(1, $baselineStart->diffInDays($baselineEnd) + 1);
             $currentDailyRate = $currentCount / $days;
@@ -552,44 +540,134 @@ class StatisticsController extends Controller
                 [$start, $end] = [$end->copy()->startOfDay(), $start->copy()->endOfDay()];
             }
 
-            $q = DB::table('reports')
-                ->where(function ($query) {
-                    $query->whereNull('is_valid')
-                          ->orWhere('is_valid', '!=', self::REPORT_INVALID);
-                })
-                ->whereRaw("COALESCE(date_reported::timestamp, created_at::timestamp) BETWEEN ?::timestamp AND ?::timestamp", [$start, $end]);
+            $cacheKey = 'range_monthly_combined_v1_'
+                . md5(implode('|', [
+                    $start->toDateString(),
+                    $end->toDateString(),
+                    strtoupper(trim((string) $crimeType)),
+                ]));
 
-            if (!empty($crimeType)) {
-                $q->whereRaw("UPPER(COALESCE(report_type::text, '')) LIKE ?", ['%' . strtoupper($crimeType) . '%']);
-            }
+            return Cache::remember($cacheKey, 600, function () use ($start, $end, $crimeType) {
+                $dbCountsByMonth = $this->getDbCountsByMonthForRange($start, $end, $crimeType);
+                $csvCountsByMonth = $this->getCsvCountsByMonthForRange($start, $end, $crimeType);
 
-            $rows = $q->selectRaw("to_char(COALESCE(date_reported::timestamp, created_at::timestamp), 'YYYY-MM') as ym, COUNT(*) as c")
-                ->groupBy('ym')
-                ->orderBy('ym', 'asc')
-                ->get();
+                $monthlySeries = [];
+                $cursor = $start->copy()->startOfMonth();
+                $last = $end->copy()->startOfMonth();
 
-            $countsByMonth = collect($rows)->mapWithKeys(function ($row) {
-                return [strval($row->ym) => intval($row->c)];
+                while ($cursor->lte($last)) {
+                    $ym = $cursor->format('Y-m');
+                    $monthlySeries[] = [
+                        'year' => intval($cursor->format('Y')),
+                        'month' => intval($cursor->format('m')),
+                        'count' => intval(($dbCountsByMonth[$ym] ?? 0) + ($csvCountsByMonth[$ym] ?? 0)),
+                    ];
+                    $cursor->addMonth();
+                }
+
+                return $monthlySeries;
             });
-
-            $monthlySeries = [];
-            $cursor = $start->copy()->startOfMonth();
-            $last = $end->copy()->startOfMonth();
-
-            while ($cursor->lte($last)) {
-                $ym = $cursor->format('Y-m');
-                $monthlySeries[] = [
-                    'year' => intval($cursor->format('Y')),
-                    'month' => intval($cursor->format('m')),
-                    'count' => intval($countsByMonth->get($ym, 0)),
-                ];
-                $cursor->addMonth();
-            }
-
-            return $monthlySeries;
         } catch (\Throwable $e) {
             return [];
         }
+    }
+
+    private function getDbCountsByMonthForRange(Carbon $start, Carbon $end, $crimeType = null): array
+    {
+        $q = DB::table('reports')
+            ->where(function ($query) {
+                $query->whereNull('is_valid')
+                      ->orWhere('is_valid', '!=', self::REPORT_INVALID);
+            })
+            ->whereRaw("COALESCE(date_reported::timestamp, created_at::timestamp) BETWEEN ?::timestamp AND ?::timestamp", [$start, $end]);
+
+        if (!empty($crimeType)) {
+            $q->whereRaw("UPPER(COALESCE(report_type::text, '')) LIKE ?", ['%' . strtoupper($crimeType) . '%']);
+        }
+
+        $rows = $q->selectRaw("to_char(COALESCE(date_reported::timestamp, created_at::timestamp), 'YYYY-MM') as ym, COUNT(*) as c")
+            ->groupBy('ym')
+            ->orderBy('ym', 'asc')
+            ->get();
+
+        return collect($rows)->mapWithKeys(function ($row) {
+            return [strval($row->ym) => intval($row->c)];
+        })->all();
+    }
+
+    private function getCsvCountsByMonthForRange(Carbon $start, Carbon $end, $crimeType = null): array
+    {
+        $csvPath = storage_path('app/davao_crime_5years.csv');
+        if (!file_exists($csvPath)) {
+            return [];
+        }
+
+        $countsByMonth = [];
+        $crimeNeedle = strtoupper(trim((string) $crimeType));
+
+        $file = fopen($csvPath, 'r');
+        if (!$file) {
+            return [];
+        }
+
+        try {
+            $header = fgetcsv($file);
+            if (!$header) {
+                return [];
+            }
+
+            $headerMap = array_change_key_case(array_flip($header), CASE_LOWER);
+            $idxDate = $headerMap['date'] ?? 1;
+            $idxType = $headerMap['crime_type'] ?? 3;
+            $idxCount = $headerMap['crime_count'] ?? 4;
+
+            while (($row = fgetcsv($file)) !== false) {
+                if (!is_array($row) || count($row) <= max($idxDate, $idxType, $idxCount)) {
+                    continue;
+                }
+
+                $rawDate = trim((string) ($row[$idxDate] ?? ''));
+                if ($rawDate === '') {
+                    continue;
+                }
+
+                try {
+                    $rowDate = Carbon::parse($rawDate)->startOfDay();
+                } catch (\Throwable $e) {
+                    continue;
+                }
+
+                if ($rowDate->lt($start->copy()->startOfDay()) || $rowDate->gt($end->copy()->endOfDay())) {
+                    continue;
+                }
+
+                $rowType = strtoupper(trim((string) ($row[$idxType] ?? '')));
+                if ($crimeNeedle !== '' && strpos($rowType, $crimeNeedle) === false) {
+                    continue;
+                }
+
+                $count = floatval($row[$idxCount] ?? 0);
+                if (!is_finite($count) || $count <= 0) {
+                    continue;
+                }
+
+                $ym = $rowDate->format('Y-m');
+                $countsByMonth[$ym] = ($countsByMonth[$ym] ?? 0) + $count;
+            }
+        } finally {
+            fclose($file);
+        }
+
+        return $countsByMonth;
+    }
+
+    private function sumMonthlyCounts(array $monthlySeries): float
+    {
+        return collect($monthlySeries)
+            ->pluck('count')
+            ->map(fn($v) => floatval($v))
+            ->filter(fn($v) => is_finite($v) && $v >= 0)
+            ->sum();
     }
 
     /**
