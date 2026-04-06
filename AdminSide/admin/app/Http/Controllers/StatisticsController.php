@@ -315,10 +315,7 @@ class StatisticsController extends Controller
                 ->filter(fn($v) => is_finite($v) && $v >= 0)
                 ->values();
 
-            if ($scopeValues->isEmpty()) {
-                return $response;
-            }
-
+            // We calculate base values first so we know what they are.
             if (!empty($crimeType)) {
                 $baseHistory = $this->getCombinedHistoricalByCrimeType($crimeType, null, null);
             } else {
@@ -333,17 +330,24 @@ class StatisticsController extends Controller
                 ->values();
 
             if ($baseValues->isEmpty()) {
-                return $response;
+                return $response; // If the ENTIRE system has no history, don't scale.
             }
 
-            $scopeAvg = $scopeValues->avg();
-            $baseAvg = $baseValues->avg();
-
-            if ($baseAvg <= 0) {
-                // If base is strictly 0 across all history (maybe impossible, but edge case), assume zero forecast.
-                $multiplier = $scopeAvg > 0 ? 1.5 : 0.00;
+            if ($scopeValues->isEmpty()) {
+                // If there is literally zero historical data for this filter context,
+                // the forecast for this specific context should be near-zero, not the overall raw baseline!
+                $multiplier = 0.00;
+                $scopeAvg = 0;
+                $baseAvg = $baseValues->avg() ?: 1;
             } else {
-                $multiplier = $scopeAvg / $baseAvg;
+                $scopeAvg = $scopeValues->avg();
+                $baseAvg = $baseValues->avg();
+
+                if ($baseAvg <= 0) {
+                    $multiplier = $scopeAvg > 0 ? 1.5 : 0.00;
+                } else {
+                    $multiplier = $scopeAvg / $baseAvg;
+                }
             }
 
             // Allow the multiplier to reflect near-zero conditions properly
@@ -391,20 +395,22 @@ class StatisticsController extends Controller
             });
 
             if ($total <= 0) {
-                return $response;
+                // If there are strictly zero crimes altogether, the forecast for this crime type is zero, not the raw baseline!
+                $ratio = 0.00;
+            } else {
+                $selected = $byType
+                    ->filter(function ($row) use ($crimeType) {
+                        return strtoupper(trim((string)($row['type'] ?? ''))) === strtoupper(trim((string)$crimeType));
+                    })
+                    ->sum(function ($row) {
+                        return floatval($row['count'] ?? 0);
+                    });
+
+                $ratio = $selected / $total;
             }
 
-            $selected = $byType
-                ->filter(function ($row) use ($crimeType) {
-                    return strtoupper(trim((string)($row['type'] ?? ''))) === strtoupper(trim((string)$crimeType));
-                })
-                ->sum(function ($row) {
-                    return floatval($row['count'] ?? 0);
-                });
-
-            $ratio = $selected / $total;
-            // keep realistic proportions so lines remain visible but distinctly per-crime
-            $ratio = max(0.02, min(0.95, $ratio));
+            // Allow the ratio to fall to 0 if this specific crime never happened
+            $ratio = max(0.00, min(1.00, $ratio));
 
             $adjusted = [];
             foreach ($response['data'] as $point) {
