@@ -370,6 +370,7 @@ class StatisticsController extends Controller
                 'multiplier' => round($multiplier, 3),
             ];
         } catch (\Throwable $e) {
+            \Log::error('applyFilterContextScaling error: ' . $e->getMessage() . ' at ' . $e->getFile() . ':' . $e->getLine());
             // keep original forecast on any scaling error
         }
 
@@ -462,11 +463,11 @@ class StatisticsController extends Controller
             // not only record insertion timestamps.
             
             $currentCount = (clone $baseQuery)
-                ->whereRaw("COALESCE(date_reported, created_at) BETWEEN ? AND ?", [$start, $end])
+                ->whereRaw("COALESCE(date_reported::timestamp, created_at::timestamp) BETWEEN ?::timestamp AND ?::timestamp", [$start, $end])
                 ->count();
 
             $prevCount = (clone $baseQuery)
-                ->whereRaw("COALESCE(date_reported, created_at) BETWEEN ? AND ?", [$prevStart, $prevEnd])
+                ->whereRaw("COALESCE(date_reported::timestamp, created_at::timestamp) BETWEEN ?::timestamp AND ?::timestamp", [$prevStart, $prevEnd])
                 ->count();
 
             // Build a stable baseline from recent history so each new range filter
@@ -475,7 +476,7 @@ class StatisticsController extends Controller
             $baselineStart = $baselineEnd->copy()->subMonths(12)->startOfDay();
 
             $baselineCount = (clone $baseQuery)
-                ->whereRaw("COALESCE(date_reported, created_at) BETWEEN ? AND ?", [$baselineStart, $baselineEnd])
+                ->whereRaw("COALESCE(date_reported::timestamp, created_at::timestamp) BETWEEN ?::timestamp AND ?::timestamp", [$baselineStart, $baselineEnd])
                 ->count();
 
             $baselineDays = max(1, $baselineStart->diffInDays($baselineEnd) + 1);
@@ -529,6 +530,7 @@ class StatisticsController extends Controller
                 'multiplier' => round($multiplier, 3),
             ];
         } catch (\Throwable $e) {
+            \Log::error('applyDateRangeContextScaling error: ' . $e->getMessage() . ' at ' . $e->getFile() . ':' . $e->getLine());
             // keep original forecast if range scaling fails
         }
 
@@ -549,13 +551,13 @@ class StatisticsController extends Controller
                     $query->whereNull('is_valid')
                           ->orWhere('is_valid', '!=', self::REPORT_INVALID);
                 })
-                ->whereRaw("COALESCE(date_reported, created_at) BETWEEN ? AND ?", [$start, $end]);
+                ->whereRaw("COALESCE(date_reported::timestamp, created_at::timestamp) BETWEEN ?::timestamp AND ?::timestamp", [$start, $end]);
 
             if (!empty($crimeType)) {
                 $q->whereRaw("UPPER(COALESCE(report_type::text, '')) LIKE ?", ['%' . strtoupper($crimeType) . '%']);
             }
 
-            $rows = $q->selectRaw("to_char(COALESCE(date_reported, created_at), 'YYYY-MM') as ym, COUNT(*) as c")
+            $rows = $q->selectRaw("to_char(COALESCE(date_reported::timestamp, created_at::timestamp), 'YYYY-MM') as ym, COUNT(*) as c")
                 ->groupBy('ym')
                 ->orderBy('ym', 'asc')
                 ->get();
