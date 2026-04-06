@@ -959,9 +959,10 @@
     }
 
     function getNormalizedDashboardDates() {
-        const stored = readStoredDashboardDates();
-        let from = normalizeIsoDate(dashboardDateFrom) || stored.from;
-        let to = normalizeIsoDate(dashboardDateTo) || stored.to;
+        // Use server-provided URL/query state as the source of truth for API calls.
+        // This prevents old localStorage values from silently affecting forecasts.
+        let from = normalizeIsoDate(dashboardDateFrom);
+        let to = normalizeIsoDate(dashboardDateTo);
 
         if (from && to && from > to) {
             const tmp = from;
@@ -988,12 +989,11 @@
                 const stored = readStoredDashboardDates();
                 if (stored.from && !fromInput.value) fromInput.value = stored.from;
                 if (stored.to && !toInput.value) toInput.value = stored.to;
+            } else {
+                // Keep storage synced with active server state.
+                persistDashboardDates(fromInput.value || null, toInput.value || null);
             }
         }
-
-        // Keep stored values synced with server-provided active filter.
-        const normalizedOnLoad = getNormalizedDashboardDates();
-        persistDashboardDates(normalizedOnLoad.from, normalizedOnLoad.to);
 
         if(document.getElementById('forecast-content')) {
             setTimeout(fetchForecast, 1000); // Small delay to allow UI to settle

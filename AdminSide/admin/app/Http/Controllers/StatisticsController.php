@@ -444,8 +444,8 @@ class StatisticsController extends Controller
         }
 
         try {
-            $end = $dateTo ? Carbon::parse($dateTo)->endOfDay() : Carbon::now()->endOfDay();
-            $start = $dateFrom ? Carbon::parse($dateFrom)->startOfDay() : $end->copy()->subDays(29)->startOfDay();
+            $end = $dateTo ? $this->parseForecastFilterDate($dateTo, true) : Carbon::now()->endOfDay();
+            $start = $dateFrom ? $this->parseForecastFilterDate($dateFrom, false) : $end->copy()->subDays(29)->startOfDay();
             if ($start->gt($end)) {
                 [$start, $end] = [$end->copy()->startOfDay(), $start->copy()->endOfDay()];
             }
@@ -544,8 +544,8 @@ class StatisticsController extends Controller
     private function getDateRangeMonthlyReports($dateFrom = null, $dateTo = null, $crimeType = null): array
     {
         try {
-            $end = $dateTo ? Carbon::parse($dateTo)->endOfDay() : Carbon::now()->endOfDay();
-            $start = $dateFrom ? Carbon::parse($dateFrom)->startOfDay() : $end->copy()->subDays(29)->startOfDay();
+            $end = $dateTo ? $this->parseForecastFilterDate($dateTo, true) : Carbon::now()->endOfDay();
+            $start = $dateFrom ? $this->parseForecastFilterDate($dateFrom, false) : $end->copy()->subDays(29)->startOfDay();
             if ($start->gt($end)) {
                 [$start, $end] = [$end->copy()->startOfDay(), $start->copy()->endOfDay()];
             }
@@ -678,6 +678,21 @@ class StatisticsController extends Controller
             ->map(fn($v) => floatval($v))
             ->filter(fn($v) => is_finite($v) && $v >= 0)
             ->sum();
+    }
+
+    private function parseForecastFilterDate($value, bool $endOfDay = false): Carbon
+    {
+        $raw = trim((string) $value);
+
+        // Prefer strict ISO parsing first to avoid locale ambiguity.
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $raw)) {
+            $dt = Carbon::createFromFormat('Y-m-d', $raw);
+            return $endOfDay ? $dt->endOfDay() : $dt->startOfDay();
+        }
+
+        // Backward-compatible fallback for legacy/non-ISO callers.
+        $dt = Carbon::parse($raw);
+        return $endOfDay ? $dt->endOfDay() : $dt->startOfDay();
     }
 
     /**
