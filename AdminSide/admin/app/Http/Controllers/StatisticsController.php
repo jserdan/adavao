@@ -607,68 +607,89 @@ class StatisticsController extends Controller
 
     private function getCsvCountsByMonthForRange(Carbon $start, Carbon $end, $crimeType = null): array
     {
+        $monthlyAggregate = $this->getCsvMonthlyAggregate($crimeType);
+        if (empty($monthlyAggregate)) {
+            return [];
+        }
+
+        $countsByMonth = [];
+        $cursor = $start->copy()->startOfMonth();
+        $last = $end->copy()->startOfMonth();
+
+        while ($cursor->lte($last)) {
+            $ym = $cursor->format('Y-m');
+            $countsByMonth[$ym] = floatval($monthlyAggregate[$ym] ?? 0);
+            $cursor->addMonth();
+        }
+
+        return $countsByMonth;
+    }
+
+    private function getCsvMonthlyAggregate($crimeType = null): array
+    {
         $csvPath = storage_path('app/davao_crime_5years.csv');
         if (!file_exists($csvPath)) {
             return [];
         }
 
-        $countsByMonth = [];
         $crimeNeedle = strtoupper(trim((string) $crimeType));
+        $mtime = filemtime($csvPath) ?: 0;
+        $cacheKey = 'csv_monthly_aggregate_v1_' . md5($crimeNeedle . '|' . $mtime);
 
-        $file = fopen($csvPath, 'r');
-        if (!$file) {
-            return [];
-        }
+        return Cache::remember($cacheKey, 3600, function () use ($csvPath, $crimeNeedle) {
+            $countsByMonth = [];
+            $file = fopen($csvPath, 'r');
 
-        try {
-            $header = fgetcsv($file);
-            if (!$header) {
+            if (!$file) {
                 return [];
             }
 
-            $headerMap = array_change_key_case(array_flip($header), CASE_LOWER);
-            $idxDate = $headerMap['date'] ?? 1;
-            $idxType = $headerMap['crime_type'] ?? 3;
-            $idxCount = $headerMap['crime_count'] ?? 4;
-
-            while (($row = fgetcsv($file)) !== false) {
-                if (!is_array($row) || count($row) <= max($idxDate, $idxType, $idxCount)) {
-                    continue;
+            try {
+                $header = fgetcsv($file);
+                if (!$header) {
+                    return [];
                 }
 
-                $rawDate = trim((string) ($row[$idxDate] ?? ''));
-                if ($rawDate === '') {
-                    continue;
-                }
+                $headerMap = array_change_key_case(array_flip($header), CASE_LOWER);
+                $idxDate = $headerMap['date'] ?? 1;
+                $idxType = $headerMap['crime_type'] ?? 3;
+                $idxCount = $headerMap['crime_count'] ?? 4;
 
-                try {
-                    $rowDate = Carbon::parse($rawDate)->startOfDay();
-                } catch (\Throwable $e) {
-                    continue;
-                }
+                while (($row = fgetcsv($file)) !== false) {
+                    if (!is_array($row) || count($row) <= max($idxDate, $idxType, $idxCount)) {
+                        continue;
+                    }
 
-                if ($rowDate->lt($start->copy()->startOfDay()) || $rowDate->gt($end->copy()->endOfDay())) {
-                    continue;
-                }
+                    $rawDate = trim((string) ($row[$idxDate] ?? ''));
+                    if ($rawDate === '') {
+                        continue;
+                    }
 
-                $rowType = strtoupper(trim((string) ($row[$idxType] ?? '')));
-                if ($crimeNeedle !== '' && strpos($rowType, $crimeNeedle) === false) {
-                    continue;
-                }
+                    try {
+                        $rowDate = Carbon::parse($rawDate);
+                    } catch (\Throwable $e) {
+                        continue;
+                    }
 
-                $count = floatval($row[$idxCount] ?? 0);
-                if (!is_finite($count) || $count <= 0) {
-                    continue;
-                }
+                    $rowType = strtoupper(trim((string) ($row[$idxType] ?? '')));
+                    if ($crimeNeedle !== '' && strpos($rowType, $crimeNeedle) === false) {
+                        continue;
+                    }
 
-                $ym = $rowDate->format('Y-m');
-                $countsByMonth[$ym] = ($countsByMonth[$ym] ?? 0) + $count;
+                    $count = floatval($row[$idxCount] ?? 0);
+                    if (!is_finite($count) || $count <= 0) {
+                        continue;
+                    }
+
+                    $ym = $rowDate->format('Y-m');
+                    $countsByMonth[$ym] = ($countsByMonth[$ym] ?? 0) + $count;
+                }
+            } finally {
+                fclose($file);
             }
-        } finally {
-            fclose($file);
-        }
 
-        return $countsByMonth;
+            return $countsByMonth;
+        });
     }
 
     private function sumMonthlyCounts(array $monthlySeries): float
