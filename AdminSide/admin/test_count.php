@@ -1,0 +1,1 @@
+<?php echo 'Counts: ' . DB::table('reports')->count() . '\n'; echo 'Between dates: ' . DB::table('reports')->whereRaw('COALESCE(date_reported::timestamp, created_at::timestamp) BETWEEN \'2023-06-07 00:00:00\' AND \'2024-10-02 23:59:59\'')->count() . '\n'; ?>
