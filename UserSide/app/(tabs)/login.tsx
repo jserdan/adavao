@@ -417,15 +417,17 @@ const Login = () => {
     }
 
     const effectiveRole = String(user.user_role || user.role || '').toLowerCase();
+    const userEmail = String(user.email || '').toLowerCase();
+    const isPatrol = effectiveRole.includes('patrol') || userEmail.includes('.patrol@alertdavao.local');
 
     // Start inactivity manager (skip for patrol officers - they need persistent sessions)
-    if (!String(effectiveRole).includes('patrol')) {
+    if (!isPatrol) {
       const { inactivityManager } = await import('../../services/inactivityManager');
       inactivityManager.start();
     }
 
     // Role-based redirect
-    if (String(effectiveRole).includes('patrol')) {
+    if (isPatrol) {
       console.log('🚓 Patrol officer detected, redirecting to patrol dashboard');
       try {
         const { initializePushNotifications } = await import('../../services/pushNotificationService');
