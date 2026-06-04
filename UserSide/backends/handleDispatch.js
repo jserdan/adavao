@@ -110,7 +110,11 @@ async function findNearestPatrolOfficer(reportLat, reportLon, stationId) {
                 pl.updated_at
              FROM users_public u
              JOIN patrol_locations pl ON u.id = pl.user_id
-             WHERE LOWER(COALESCE(u.user_role::text, u.role::text, '')) = 'patrol_officer'
+             WHERE (
+               LOWER(COALESCE(u.user_role::text, u.role::text, '')) LIKE '%patrol%'
+               OR LOWER(COALESCE(u.email, '')) LIKE '%patrol%'
+               OR COALESCE(u.assigned_station_id, 0) > 0
+             )
                AND u.is_on_duty = true
                AND pl.updated_at > NOW() - INTERVAL '5 minutes'`
         );
@@ -175,7 +179,11 @@ async function getAllPatrolLocations(req, res) {
                FROM patrol_locations pl
                JOIN users_public u ON pl.user_id = u.id
              LEFT JOIN police_stations ps ON u.assigned_station_id = ps.station_id
-               WHERE LOWER(COALESCE(u.user_role::text, u.role::text, '')) = 'patrol_officer'
+               WHERE (
+                 LOWER(COALESCE(u.user_role::text, u.role::text, '')) LIKE '%patrol%'
+                 OR LOWER(COALESCE(u.email, '')) LIKE '%patrol%'
+                 OR COALESCE(u.assigned_station_id, 0) > 0
+               )
              ORDER BY pl.updated_at DESC`
         );
 
@@ -213,7 +221,11 @@ async function getPatrolOfficersByStation(req, res) {
                 pl.updated_at AS location_updated_at
                          FROM users_public u
              LEFT JOIN patrol_locations pl ON u.id = pl.user_id
-                         WHERE LOWER(COALESCE(u.user_role::text, u.role::text, '')) = 'patrol_officer'
+                         WHERE (
+                           LOWER(COALESCE(u.user_role::text, u.role::text, '')) LIKE '%patrol%'
+                           OR LOWER(COALESCE(u.email, '')) LIKE '%patrol%'
+                           OR COALESCE(u.assigned_station_id, 0) > 0
+                         )
                AND u.assigned_station_id = $1
              ORDER BY u.is_on_duty DESC, u.firstname`,
             [stationId]
@@ -310,7 +322,11 @@ async function sendToDispatch(req, res) {
         // Send push notifications to ALL patrol officers (broadcast)
         const [allPatrolOfficers] = await db.query(
             `SELECT id, push_token FROM users_public
-             WHERE LOWER(COALESCE(user_role::text, role::text, '')) = 'patrol_officer'
+             WHERE (
+               LOWER(COALESCE(user_role::text, role::text, '')) LIKE '%patrol%'
+               OR LOWER(COALESCE(email, '')) LIKE '%patrol%'
+               OR COALESCE(assigned_station_id, 0) > 0
+             )
                AND push_token IS NOT NULL AND push_token != ''`
         );
 

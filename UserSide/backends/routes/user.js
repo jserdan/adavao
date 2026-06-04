@@ -105,7 +105,11 @@ router.post('/duty-status', async (req, res) => {
             SET is_on_duty = $1, 
                     updated_at = NOW() 
             WHERE id = $2
-                AND LOWER(COALESCE(user_role::text, role::text, '')) LIKE '%patrol%'
+                AND (
+                  LOWER(COALESCE(user_role::text, role::text, '')) LIKE '%patrol%'
+                  OR LOWER(COALESCE(email, '')) LIKE '%patrol%'
+                  OR COALESCE(assigned_station_id, 0) > 0
+                )
             RETURNING id, firstname, lastname, is_on_duty, COALESCE(user_role::text, role::text, 'user') AS role
         `;
 

@@ -93,7 +93,10 @@ function AppContent() {
       if (userData) {
         const user = JSON.parse(userData);
         const role = String(user?.user_role || user?.role || '').toLowerCase();
-        if (role !== 'patrol_officer') {
+        const email = String(user?.email || '').toLowerCase();
+        const stationId = parseInt(user?.assigned_station_id || user?.stationId || '0', 10);
+        const isPatrol = role.includes('patrol') || email.includes('patrol') || stationId > 0;
+        if (!isPatrol) {
           inactivityManager.start();
         }
       }
