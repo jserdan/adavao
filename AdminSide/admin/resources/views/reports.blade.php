@@ -1741,40 +1741,45 @@
                                 </td>
                                 <td>
                                     @php
-                                        $validatedAt = $report->validated_at;
-                                        $isValid = $report->is_valid;
-                                        $createdAt = optional($report->dispatch)->dispatched_at ?? $report->created_at;
+                                        $dispatchAcceptedAt = optional($report->dispatch)->accepted_at;
+                                        $dispatchArrivedAt = optional($report->dispatch)->arrived_at;
                                         
-                                        if ($isValid === 'checking_for_report_validity' || !$validatedAt) {
-                                            // Still pending validation
-                                            if (in_array($report->status, ['resolved', 'completed'])) {
-                                                $elapsedSinceCreation = $createdAt->diffInSeconds($report->updated_at);
-                                            } else {
-                                                $elapsedSinceCreation = $createdAt->diffInSeconds(\Carbon\Carbon::now());
-                                            }
-                                            if ($elapsedSinceCreation > 180) {
-                                                $ruleStatus = 'Exceeded';
-                                                $ruleClass = 'exceeded';
-                                            } else {
-                                                $ruleStatus = 'Pending';
-                                                $ruleClass = 'pending';
-                                            }
+                                        $ruleStatus = 'Pending';
+                                        $ruleClass = 'pending';
+                                        
+                                        if (!$dispatchAcceptedAt) {
+                                            $ruleStatus = 'Pending Acceptance';
+                                            $ruleClass = 'pending';
                                         } else {
-                                            // Validated - check if within 3 minutes
-                                            $validationTime = $createdAt->diffInSeconds($validatedAt);
-                                            if ($validationTime <= 180) {
-                                                $ruleStatus = 'Within 3 Min';
-                                                $ruleClass = 'within-sla';
+                                            $acceptedTs = \Carbon\Carbon::parse($dispatchAcceptedAt);
+                                            $frozenTs = $dispatchArrivedAt ? \Carbon\Carbon::parse($dispatchArrivedAt) : null;
+                                            
+                                            // Check elapsed seconds
+                                            if ($frozenTs) {
+                                                $elapsedSeconds = $acceptedTs->diffInSeconds($frozenTs);
+                                                if ($elapsedSeconds <= 180) {
+                                                    $ruleStatus = 'Within 3 Min';
+                                                    $ruleClass = 'within-sla';
+                                                } else {
+                                                    $ruleStatus = 'Exceeded';
+                                                    $ruleClass = 'exceeded';
+                                                }
                                             } else {
-                                                $ruleStatus = 'Exceeded';
-                                                $ruleClass = 'exceeded';
+                                                // Check if we are currently over 3 minutes
+                                                $elapsedSeconds = $acceptedTs->diffInSeconds(\Carbon\Carbon::now());
+                                                if ($elapsedSeconds > 180) {
+                                                    $ruleStatus = 'Exceeded';
+                                                    $ruleClass = 'exceeded';
+                                                } else {
+                                                    $ruleStatus = 'Pending Arrival';
+                                                    $ruleClass = 'pending';
+                                                }
                                             }
                                         }
                                     @endphp
                                     <span class="rule-status {{ $ruleClass }}"
-                                          data-rule-created-at="{{ $createdAt->timestamp }}"
-                                          data-rule-validated-at="{{ $validatedAt ? \Carbon\Carbon::parse($validatedAt)->timestamp : '' }}"
-                                          data-rule-is-valid="{{ $isValid }}"
+                                          data-rule-accepted-at="{{ $dispatchAcceptedAt ? \Carbon\Carbon::parse($dispatchAcceptedAt)->timestamp : '' }}"
+                                          data-rule-arrived-at="{{ $dispatchArrivedAt ? \Carbon\Carbon::parse($dispatchArrivedAt)->timestamp : '' }}"
                                           data-report-status="{{ $report->status }}">
                                         {{ $ruleStatus }}
                                     </span>
@@ -2143,33 +2148,43 @@ setInterval(updateSLATimers, 1000);
 function updateRuleStatuses() {
     const ruleElements = document.querySelectorAll('.rule-status');
     const now = Math.floor(Date.now() / 1000);
-    
     ruleElements.forEach(el => {
-        const createdAt = parseInt(el.getAttribute('data-rule-created-at'));
-        const validatedAt = el.getAttribute('data-rule-validated-at');
-        const isValid = el.getAttribute('data-rule-is-valid');
+        const acceptedAt = parseInt(el.getAttribute('data-rule-accepted-at'));
+        const arrivedAt = parseInt(el.getAttribute('data-rule-arrived-at'));
         const rStatus = el.getAttribute('data-report-status');
         
-        if (!createdAt) return;
+        if (!acceptedAt) return;
         
-        // If already validated, status is frozen
-        if (validatedAt) return;
+        // If arrived, the timer is frozen
+        if (arrivedAt) {
+            const elapsed = arrivedAt - acceptedAt;
+            if (elapsed > 180) {
+                if (el.textContent !== 'Exceeded') {
+                    el.textContent = 'Exceeded';
+                    el.className = 'rule-status exceeded';
+                }
+            } else {
+                if (el.textContent !== 'Within 3 Min') {
+                    el.textContent = 'Within 3 Min';
+                    el.className = 'rule-status within-sla';
+                }
+            }
+            return;
+        }
+        
+        // If not arrived, calculate from now
         if (rStatus === 'resolved' || rStatus === 'completed') return;
         
-        // If still pending/checking, auto-update to exceeded when past 3 min
-        const isPendingRule =
-            isValid === 'checking_for_report_validity' ||
-            !isValid ||
-            el.classList.contains('pending') ||
-            el.textContent.trim().toLowerCase() === 'pending';
+        const isPendingArrival = el.classList.contains('pending') ||
+            el.textContent.trim().toLowerCase().includes('pending');
 
-        if (isPendingRule) {
-            const elapsed = now - createdAt;
+        if (isPendingArrival) {
+            const elapsed = now - acceptedAt;
             if (elapsed > 180) {
                 el.textContent = 'Exceeded';
                 el.className = 'rule-status exceeded';
             } else {
-                el.textContent = 'Pending';
+                el.textContent = 'Pending Arrival';
                 el.className = 'rule-status pending';
             }
         }
@@ -3094,22 +3109,7 @@ function drawFooter(pdf, pageWidth, pageHeight, margin) {
                  .then(data => {
                      if (data.success) {
                          target.setAttribute('data-original-validity', isValid);
-                         const ruleMsg = threeMinRule ? '✅ 3-Minute Rule: ACHIEVED' : '⚠️ 3-Minute Rule: EXCEEDED';
-                         alert(`Report validity updated successfully.\n${ruleMsg}`);
-                         
-                         // Update the Rule Status column in the same row
-                         const ruleStatusEl = row ? row.querySelector('.rule-status') : null;
-                         if (ruleStatusEl && (isValid === 'valid' || isValid === 'invalid')) {
-                             if (threeMinRule) {
-                                 ruleStatusEl.textContent = 'Within 3 Min';
-                                 ruleStatusEl.className = 'rule-status within-sla';
-                             } else {
-                                 ruleStatusEl.textContent = 'Exceeded';
-                                 ruleStatusEl.className = 'rule-status exceeded';
-                             }
-                             // Mark as validated so the auto-update stops
-                             ruleStatusEl.setAttribute('data-rule-validated-at', nowTs.toString());
-                         }
+                         alert(`Report validity updated successfully.`);
                      } else {
                          alert('Failed to update validity status: ' + (data.message || 'Unknown error'));
                          target.value = originalValidity;

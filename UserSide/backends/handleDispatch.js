@@ -115,8 +115,7 @@ async function findNearestPatrolOfficer(reportLat, reportLon, stationId) {
                OR LOWER(COALESCE(u.email, '')) LIKE '%patrol%'
                OR COALESCE(u.assigned_station_id, 0) > 0
              )
-               AND u.is_on_duty = true
-               AND pl.updated_at > NOW() - INTERVAL '5 minutes'`
+               AND u.is_on_duty = true`
         );
 
         if (!officers || officers.length === 0) {
