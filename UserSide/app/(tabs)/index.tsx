@@ -61,8 +61,6 @@ export default function UserDashboard() {
     const [showNotifications, setShowNotifications] = useState(false);
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [userId, setUserId] = useState<string>('');
-    const [userRoleDebug, setUserRoleDebug] = useState('');
-    const [userStationDebug, setUserStationDebug] = useState('');
     const [lastUnreadCount, setLastUnreadCount] = useState(0);
     const [badgeHidden, setBadgeHidden] = useState(false);
     const [unreadChatCount, setUnreadChatCount] = useState(0);
@@ -98,11 +96,8 @@ export default function UserDashboard() {
                     const assignedStation = parseInt(user.assigned_station_id || user.stationId || '0', 10);
                     const isPatrol = effectiveRole.includes('patrol') || userEmail.includes('patrol') || assignedStation > 0;
 
-                    setUserRoleDebug(`effectiveRole: ${effectiveRole} / userEmail: ${userEmail}`);
-                    setUserStationDebug(`assignedStation: ${assignedStation} / isPatrol: ${isPatrol}`);
-
                     if (isPatrol) {
-                        console.log('👮 Patrol officer detected on app load, redirecting via React state');
+                        console.log('👮 Patrol officer detected, redirecting to patrol dashboard');
                         setIsPatrolRedirect(true);
                         return;
                     }
@@ -450,36 +445,7 @@ export default function UserDashboard() {
     }
 
     if (isPatrolRedirect) {
-        return (
-            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-                <View style={{ backgroundColor: '#fff', padding: 24, borderRadius: 16, alignItems: 'center', width: '85%', elevation: 4 }}>
-                    <Ionicons name="shield-checkmark" size={64} color="#1D3557" style={{ marginBottom: 16 }} />
-                    <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#1D3557', marginBottom: 8 }}>Patrol Officer</Text>
-                    <Text style={{ fontSize: 15, color: '#6b7280', textAlign: 'center', marginBottom: 24 }}>
-                        You have successfully authenticated as a Patrol Officer.
-                    </Text>
-                    
-                    <TouchableOpacity 
-                        style={{ backgroundColor: '#1D3557', paddingVertical: 14, paddingHorizontal: 24, borderRadius: 12, width: '100%', alignItems: 'center', marginBottom: 12 }}
-                        onPress={() => {
-                            console.log('User manually clicking Patrol Dashboard redirect');
-                            router.replace('/(patrol)/dashboard' as any);
-                        }}
-                    >
-                        <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>Continue to Dashboard</Text>
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity 
-                        style={{ paddingVertical: 12, width: '100%', alignItems: 'center' }}
-                        onPress={() => {
-                            AsyncStorage.clear().then(() => router.replace('/(tabs)/login'));
-                        }}
-                    >
-                        <Text style={{ color: '#E63946', fontSize: 15, fontWeight: '500' }}>Sign Out</Text>
-                    </TouchableOpacity>
-                </View>
-            </View>
-        );
+        return <Redirect href="/(patrol)/dashboard" />;
     }
 
     if (!isLoggedIn) {
@@ -489,26 +455,6 @@ export default function UserDashboard() {
 
     return (
         <View style={styles.container}>
-            <View style={{ marginTop: 40, padding: 10, backgroundColor: 'yellow' }}>
-                <Text style={{ color: 'red', fontWeight: 'bold' }}>
-                    DEBUG DIAGNOSTICS:
-                </Text>
-                <Text style={{ color: 'black' }}>
-                    isLoggedIn: {String(isLoggedIn)}
-                </Text>
-                <Text style={{ color: 'black' }}>
-                    userName: {userName}
-                </Text>
-                <Text style={{ color: 'black' }}>
-                    userId: {userId}
-                </Text>
-                <Text style={{ color: 'black' }}>
-                    {userRoleDebug}
-                </Text>
-                <Text style={{ color: 'black' }}>
-                    {userStationDebug}
-                </Text>
-            </View>
             {/* Flag Toast Notification */}
             <FlagNotificationToast
                 notification={flagNotification}
