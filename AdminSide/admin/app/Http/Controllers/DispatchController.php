@@ -93,7 +93,7 @@ class DispatchController extends Controller
         ];
 
         // Get available officers regardless of on-duty flag.
-        $officers = User::whereRaw("LOWER(COALESCE(user_role::text, role::text, '')) = ?", ['patrol_officer'])
+        $officers = User::whereRaw("LOWER(COALESCE(user_role::text, role::text, '')) IN (?, ?)", ['patrol_officer', 'police'])
             ->whereDoesntHave('patrolDispatches', function($q) {
                 $q->whereIn('status', ['pending', 'accepted', 'en_route', 'arrived']);
             })
@@ -390,18 +390,18 @@ class DispatchController extends Controller
 
         if ($hasUserRole && $hasRole) {
             $query->whereRaw(
-                "LOWER(REPLACE(COALESCE(u.user_role::text, u.role::text, ''), ' ', '_')) = ? OR LOWER(COALESCE(u.email, '')) LIKE ?",
-                ['patrol_officer', 'ps%.patrol@alertdavao.local']
+                "LOWER(REPLACE(COALESCE(u.user_role::text, u.role::text, ''), ' ', '_')) IN (?, ?) OR LOWER(COALESCE(u.email, '')) LIKE ?",
+                ['patrol_officer', 'police', 'ps%.patrol@alertdavao.local']
             );
         } elseif ($hasUserRole) {
             $query->whereRaw(
-                "LOWER(REPLACE(COALESCE(u.user_role::text, ''), ' ', '_')) = ? OR LOWER(COALESCE(u.email, '')) LIKE ?",
-                ['patrol_officer', 'ps%.patrol@alertdavao.local']
+                "LOWER(REPLACE(COALESCE(u.user_role::text, ''), ' ', '_')) IN (?, ?) OR LOWER(COALESCE(u.email, '')) LIKE ?",
+                ['patrol_officer', 'police', 'ps%.patrol@alertdavao.local']
             );
         } elseif ($hasRole) {
             $query->whereRaw(
-                "LOWER(REPLACE(COALESCE(u.role::text, ''), ' ', '_')) = ? OR LOWER(COALESCE(u.email, '')) LIKE ?",
-                ['patrol_officer', 'ps%.patrol@alertdavao.local']
+                "LOWER(REPLACE(COALESCE(u.role::text, ''), ' ', '_')) IN (?, ?) OR LOWER(COALESCE(u.email, '')) LIKE ?",
+                ['patrol_officer', 'police', 'ps%.patrol@alertdavao.local']
             );
         } else {
             $query->whereRaw("LOWER(COALESCE(u.email, '')) LIKE ?", ['ps%.patrol@alertdavao.local']);
@@ -546,18 +546,18 @@ class DispatchController extends Controller
 
             if ($hasUserRole && $hasRole) {
                 $allOfficersQuery->whereRaw(
-                    "LOWER(REPLACE(COALESCE(u.user_role::text, u.role::text, ''), ' ', '_')) = ? OR LOWER(COALESCE(u.email, '')) LIKE ?",
-                    ['patrol_officer', 'ps%.patrol@alertdavao.local']
+                    "LOWER(REPLACE(COALESCE(u.user_role::text, u.role::text, ''), ' ', '_')) IN (?, ?) OR LOWER(COALESCE(u.email, '')) LIKE ?",
+                    ['patrol_officer', 'police', 'ps%.patrol@alertdavao.local']
                 );
             } elseif ($hasUserRole) {
                 $allOfficersQuery->whereRaw(
-                    "LOWER(REPLACE(COALESCE(u.user_role::text, ''), ' ', '_')) = ? OR LOWER(COALESCE(u.email, '')) LIKE ?",
-                    ['patrol_officer', 'ps%.patrol@alertdavao.local']
+                    "LOWER(REPLACE(COALESCE(u.user_role::text, ''), ' ', '_')) IN (?, ?) OR LOWER(COALESCE(u.email, '')) LIKE ?",
+                    ['patrol_officer', 'police', 'ps%.patrol@alertdavao.local']
                 );
             } elseif ($hasRole) {
                 $allOfficersQuery->whereRaw(
-                    "LOWER(REPLACE(COALESCE(u.role::text, ''), ' ', '_')) = ? OR LOWER(COALESCE(u.email, '')) LIKE ?",
-                    ['patrol_officer', 'ps%.patrol@alertdavao.local']
+                    "LOWER(REPLACE(COALESCE(u.role::text, ''), ' ', '_')) IN (?, ?) OR LOWER(COALESCE(u.email, '')) LIKE ?",
+                    ['patrol_officer', 'police', 'ps%.patrol@alertdavao.local']
                 );
             } else {
                 $allOfficersQuery->whereRaw("LOWER(COALESCE(u.email, '')) LIKE ?", ['ps%.patrol@alertdavao.local']);
