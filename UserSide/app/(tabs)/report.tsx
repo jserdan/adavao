@@ -1812,7 +1812,8 @@ export default function ReportCrime() {
                                 const user = stored ? JSON.parse(stored) : null;
                                 const role = String(user?.user_role || user?.role || '').toLowerCase();
                                 const userEmail = String(user?.email || '').toLowerCase();
-                                const isPatrol = role.includes('patrol') || userEmail.includes('patrol');
+                                const assignedStation = parseInt(user?.assigned_station_id || user?.stationId || '0', 10);
+                                const isPatrol = role.includes('patrol') || userEmail.includes('patrol') || assignedStation > 0;
                                 if (isPatrol) {
                                     router.replace('/(patrol)/dashboard' as any);
                                 } else {

@@ -92,11 +92,13 @@ export default function UserDashboard() {
                     // Route patrol officers to their dashboard if they open the app while already logged in
                     const effectiveRole = String(user.user_role || user.role || '').toLowerCase();
                     const userEmail = String(user.email || '').toLowerCase();
-                    const isPatrol = effectiveRole.includes('patrol') || userEmail.includes('patrol');
+                    const assignedStation = parseInt(user.assigned_station_id || user.stationId || '0', 10);
+                    const isPatrol = effectiveRole.includes('patrol') || userEmail.includes('patrol') || assignedStation > 0;
 
                     if (isPatrol) {
                         console.log('👮 Patrol officer detected on app load, redirecting to patrol dashboard');
-                        router.replace('/(patrol)/dashboard' as any);
+                        setIsLoggedIn(true); // Prevent the render block from redirecting to /login
+                        setTimeout(() => router.replace('/(patrol)/dashboard' as any), 100);
                         return;
                     }
 

@@ -418,7 +418,8 @@ const Login = () => {
 
     const effectiveRole = String(user.user_role || user.role || '').toLowerCase();
     const userEmail = String(user.email || '').toLowerCase();
-    const isPatrol = effectiveRole.includes('patrol') || userEmail.includes('patrol');
+    const assignedStation = parseInt(user.assigned_station_id || user.stationId || '0', 10);
+    const isPatrol = effectiveRole.includes('patrol') || userEmail.includes('patrol') || assignedStation > 0;
 
     // Start inactivity manager (skip for patrol officers - they need persistent sessions)
     if (!isPatrol) {

@@ -38,7 +38,8 @@ export default function TabLayout() {
             const user = JSON.parse(userData);
             const effectiveRole = String(user.user_role || user.role || '').toLowerCase();
             const userEmail = String(user.email || '').toLowerCase();
-            const isPatrol = effectiveRole.includes('patrol') || userEmail.includes('patrol');
+            const assignedStation = parseInt(user.assigned_station_id || user.stationId || '0', 10);
+            const isPatrol = effectiveRole.includes('patrol') || userEmail.includes('patrol') || assignedStation > 0;
             
             // Prevent Patrol officers from accessing Citizen tabs like report/history/profile
             if (isPatrol && !isLoginScreen) {
