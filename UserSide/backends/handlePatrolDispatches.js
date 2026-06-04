@@ -129,9 +129,10 @@ async function getMyDispatches(req, res) {
         l.barangay,
         l.reporters_address,
         u.firstname,
+        u.lastname
       ORDER BY d.dispatched_at DESC`,
       [stationId]
-
+    );
     const formatted = rows.map((row) => {
       const media = parseJsonMaybe(row.media, []);
       const reportType = parseJsonMaybe(row.report_type, [row.report_type]);
