@@ -33,12 +33,15 @@ export const useGoogleAuth = () => {
       isExpoGo: isExpoGo,
     });
 
-    // Pass the explicit redirectUri
+    // Pass the explicit redirectUri and force account selection
     const [request, response, promptAsync] = Google.useAuthRequest({
       clientId: isExpoGo ? GOOGLE_WEB_CLIENT_ID : undefined,
       androidClientId: GOOGLE_ANDROID_CLIENT_ID,
       scopes: ['profile', 'email'],
       redirectUri: redirectUrl,
+      extraParams: {
+        prompt: 'select_account'
+      }
     });
 
     return {
