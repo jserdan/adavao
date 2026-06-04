@@ -862,4 +862,38 @@ class DispatchController extends Controller
         }
         return $dispatch;
     }
+
+    /**
+     * Live status endpoint for AJAX polling.
+     * Returns only the fields needed to update the dispatches table in real-time.
+     */
+    public function liveStatus()
+    {
+        $dispatches = PatrolDispatch::with(['patrolOfficer:id,firstname,lastname'])
+            ->whereNotIn('status', ['cancelled'])
+            ->orderBy('dispatched_at', 'desc')
+            ->limit(100)
+            ->get()
+            ->map(function ($d) {
+                return [
+                    'dispatch_id'   => $d->dispatch_id,
+                    'report_id'     => $d->report_id,
+                    'status'        => $d->status,
+                    'dispatched_at' => optional($d->dispatched_at)->toISOString(),
+                    'accepted_at'   => optional($d->accepted_at)->toISOString(),
+                    'en_route_at'   => optional($d->en_route_at)->toISOString(),
+                    'arrived_at'    => optional($d->arrived_at)->toISOString(),
+                    'completed_at'  => optional($d->completed_at)->toISOString(),
+                    'response_time' => $d->response_time,
+                    'three_minute_rule_met' => $d->three_minute_rule_met,
+                    'acceptance_time' => $d->acceptance_time,
+                    'is_valid'      => $d->is_valid,
+                    'officer_name'  => $d->patrolOfficer
+                        ? trim(($d->patrolOfficer->firstname ?? '') . ' ' . ($d->patrolOfficer->lastname ?? ''))
+                        : null,
+                ];
+            });
+
+        return response()->json(['success' => true, 'data' => $dispatches]);
+    }
 }

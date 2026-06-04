@@ -336,19 +336,18 @@ async function acceptDispatch(req, res) {
     const dispatchedAt = existing[0].dispatched_at;
     const now = new Date();
     const acceptanceTime = computeSecondsDiff(dispatchedAt, now);
-    const threeMinuteRuleMet = acceptanceTime != null ? acceptanceTime <= 180 : null;
 
+    // Note: three_minute_rule_met is NOT set here — it's determined on arrival
+    // (3-min rule = must arrive at scene within 3 minutes of acceptance)
     await db.query(
       `UPDATE patrol_dispatches
        SET patrol_officer_id = $1,
            status = 'accepted',
            accepted_at = NOW(),
            acceptance_time = $2,
-           three_minute_rule_time = $2,
-           three_minute_rule_met = $3,
            updated_at = NOW()
-       WHERE dispatch_id = $4`,
-      [userId, acceptanceTime, threeMinuteRuleMet, dispatchId]
+       WHERE dispatch_id = $3`,
+      [userId, acceptanceTime, dispatchId]
     );
 
     // Update report status to 'investigating' when dispatch is accepted

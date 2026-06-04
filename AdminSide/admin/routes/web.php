@@ -216,6 +216,7 @@ Route::middleware(['auth'])->group(function () {
     Route::put('/dispatches/{id}/assign', [DispatchController::class, 'assign'])->name('dispatches.assign');
     Route::delete('/dispatches/{id}', [DispatchController::class, 'cancel'])->name('dispatches.cancel');
     Route::get('/dispatches/analytics', [DispatchController::class, 'analytics'])->name('dispatches.analytics');
+    Route::get('/api/dispatches/live-status', [DispatchController::class, 'liveStatus'])->name('api.dispatches.liveStatus');
     Route::get('/api/on-duty-officers', [DispatchController::class, 'getOnDutyOfficers'])->name('api.onDutyOfficers');
 
     // Reports Auto-Refresh API

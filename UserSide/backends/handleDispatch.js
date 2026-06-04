@@ -551,24 +551,22 @@ async function respondToDispatch(req, res) {
             });
         }
 
-        // Calculate acceptance time
+        // Calculate acceptance time (how long it took to accept after dispatch)
         const now = new Date();
         const dispatchedAt = new Date(dispatch.dispatched_at);
         const acceptanceTimeSeconds = Math.round((now - dispatchedAt) / 1000);
-        const threeMinuteRuleMet = acceptanceTimeSeconds <= 180;
 
-        // Update dispatch with responding officer
+        // Note: three_minute_rule_met is NOT set here — it's determined on arrival
+        // (3-min rule = must arrive at scene within 3 minutes of acceptance)
         await db.query(
             `UPDATE patrol_dispatches
              SET patrol_officer_id = $1,
                  status = 'accepted',
                  accepted_at = NOW(),
                  acceptance_time = $2,
-                 three_minute_rule_time = $2,
-                 three_minute_rule_met = $3,
                  updated_at = NOW()
-             WHERE dispatch_id = $4`,
-            [userId, acceptanceTimeSeconds, threeMinuteRuleMet, dispatchId]
+             WHERE dispatch_id = $3`,
+            [userId, acceptanceTimeSeconds, dispatchId]
         );
 
         // Update report status to 'investigating' when dispatch is accepted
@@ -664,7 +662,7 @@ async function markArrived(req, res) {
 
         // Get dispatch info for response time calculation
         const [dispatchRows] = await db.query(
-            `SELECT dispatched_at FROM patrol_dispatches 
+            `SELECT dispatched_at, accepted_at FROM patrol_dispatches 
              WHERE dispatch_id = $1`,
             [dispatchId]
         );
@@ -674,24 +672,36 @@ async function markArrived(req, res) {
         }
 
         const now = new Date();
+        // Response time = from acceptance to arrival (not from dispatch)
+        const acceptedAt = dispatchRows[0].accepted_at ? new Date(dispatchRows[0].accepted_at) : null;
         const dispatchedAt = new Date(dispatchRows[0].dispatched_at);
-        const responseTimeSeconds = Math.round((now - dispatchedAt) / 1000);
+        const responseTimeSeconds = acceptedAt 
+            ? Math.round((now - acceptedAt) / 1000)
+            : Math.round((now - dispatchedAt) / 1000);
+
+        // 3-minute rule: must arrive within 3 minutes of acceptance
+        const threeMinuteRuleMet = responseTimeSeconds <= 180;
 
         await db.query(
             `UPDATE patrol_dispatches
              SET status = 'arrived',
                  arrived_at = NOW(),
                  response_time = $1,
+                 three_minute_rule_time = $1,
+                 three_minute_rule_met = $2,
                  updated_at = NOW()
-             WHERE dispatch_id = $2`,
-            [responseTimeSeconds, dispatchId]
+             WHERE dispatch_id = $3`,
+            [responseTimeSeconds, threeMinuteRuleMet, dispatchId]
         );
+
+        console.log(`📍 Officer arrived: dispatch #${dispatchId}, response time ${responseTimeSeconds}s, 3-min rule ${threeMinuteRuleMet ? 'MET ✅' : 'EXCEEDED ❌'}`);
 
         return res.json({
             success: true,
             message: 'Status updated to arrived',
             data: {
-                response_time: responseTimeSeconds
+                response_time: responseTimeSeconds,
+                three_minute_rule_met: threeMinuteRuleMet
             }
         });
 

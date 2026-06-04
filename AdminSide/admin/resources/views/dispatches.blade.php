@@ -337,17 +337,18 @@
                     <th>User</th>
                     <th>Urgency</th>
                     <th>Response Time</th>
+                    <th>3-Min Rule</th>
                     <th>Validated At</th>
                     <th>Date</th>
                     <th>Patrol Dispatched</th>
-                    <th>Validity</th>
+                    <th>Dispatch Status</th>
                     <th>Officer In-Charge</th>
                     <th style="width: 100px;">Actions</th>
                 </tr>
             </thead>
             <tbody>
                 @forelse($dispatches as $dispatch)
-                    <tr>
+                    <tr data-dispatch-id="{{ $dispatch->dispatch_id }}" data-report-id="{{ $dispatch->report_id }}">
                         <td style="font-family: monospace;">#{{ $dispatch->report_id }}</td>
                         <td>
                             <div style="font-weight: 500;">{{ $dispatch->report->user->firstname ?? 'Anonymous' }} {{ $dispatch->report->user->lastname ?? '' }}</div>
@@ -358,33 +359,47 @@
                                 {{ $urgency }}
                             </span>
                         </td>
-                        <td>
-                            @if($dispatch->report->validated_at)
+                        <td class="response-time-cell">
+                            @php
+                                $acceptedAt = $dispatch->accepted_at;
+                                $arrivedAt = $dispatch->arrived_at;
+                                $dispatchedAt = $dispatch->dispatched_at ?? $dispatch->report->created_at;
+                            @endphp
+                            @if($arrivedAt && $acceptedAt)
                                 @php
-                                    $timerStartAt = $dispatch->dispatched_at ?? $dispatch->report->created_at;
-                                    $diffInSeconds = Carbon\Carbon::parse($timerStartAt)->diffInSeconds($dispatch->report->validated_at);
-                                    $isWithinSLA = $diffInSeconds <= 180;
-                                    $h = floor($diffInSeconds / 3600);
-                                    $m = floor(($diffInSeconds % 3600) / 60);
-                                    $s = $diffInSeconds % 60;
-                                    if ($h > 0) {
-                                        $timeString = sprintf('%dh %dm %dsec', $h, $m, $s);
-                                    } elseif ($m > 0) {
-                                        $timeString = sprintf('%dm %dsec', $m, $s);
-                                    } else {
-                                        $timeString = sprintf('%dsec', $s);
-                                    }
+                                    $responseSeconds = Carbon\Carbon::parse($acceptedAt)->diffInSeconds($arrivedAt);
+                                    $h = floor($responseSeconds / 3600);
+                                    $m = floor(($responseSeconds % 3600) / 60);
+                                    $s = $responseSeconds % 60;
+                                    $timeStr = $h > 0 ? sprintf('%dh %dm %ds', $h, $m, $s) : ($m > 0 ? sprintf('%dm %ds', $m, $s) : sprintf('%ds', $s));
                                 @endphp
-                                @if($isWithinSLA)
-                                    <span class="badge badge-success">Within 3 Min</span>
+                                <span class="badge badge-success" title="Officer arrived at scene">✅ {{ $timeStr }}</span>
+                            @elseif($acceptedAt)
+                                <div class="sla-timer countdown" 
+                                     data-accepted-at="{{ Carbon\Carbon::parse($acceptedAt)->timestamp }}"
+                                     title="Time since officer accepted">⏱ Counting...</div>
+                            @else
+                                <span class="badge badge-gray">Pending acceptance</span>
+                            @endif
+                        </td>
+                        <td class="rule-status-cell">
+                            @if($dispatch->three_minute_rule_met !== null)
+                                @if($dispatch->three_minute_rule_met)
+                                    <span class="badge badge-success">✅ Within 3 Min</span>
                                 @else
-                                    <span class="badge badge-danger">Exceeded (+{{ $timeString }})</span>
+                                    <span class="badge badge-danger">❌ Exceeded</span>
+                                @endif
+                            @elseif($acceptedAt)
+                                @php
+                                    $acceptSeconds = Carbon\Carbon::parse($dispatchedAt)->diffInSeconds($acceptedAt);
+                                @endphp
+                                @if($acceptSeconds <= 180)
+                                    <span class="badge badge-success">✅ Within 3 Min</span>
+                                @else
+                                    <span class="badge badge-danger">❌ Exceeded ({{ floor($acceptSeconds/60) }}m {{ $acceptSeconds%60 }}s)</span>
                                 @endif
                             @else
-                                @php
-                                    $timerStartAt = $dispatch->dispatched_at ?? $dispatch->report->created_at;
-                                @endphp
-                                <div class="sla-timer" data-created-at="{{ $timerStartAt->timestamp }}">Pending...</div>
+                                <div class="rule-timer" data-dispatched-at="{{ Carbon\Carbon::parse($dispatchedAt)->timestamp }}">⏳ Waiting...</div>
                             @endif
                         </td>
                         <td>{{ optional($dispatch->report->validated_at)->format('M d, H:i') ?? '-' }}</td>
@@ -393,12 +408,34 @@
                             <div style="font-weight: 500;">{{ optional($dispatch->dispatched_at)->format('H:i') ?? '-' }}</div>
                             <div style="font-size: 0.75rem; color: #6b7280;">{{ optional($dispatch->dispatched_at)->format('M d') ?? '' }}</div>
                         </td>
-                        <td>
-                            <span class="validity-badge {{ $dispatch->report->is_valid }}">
-                                {{ ucfirst(str_replace('_', ' ', $dispatch->report->is_valid)) }}
+                        <td class="dispatch-status-cell">
+                            @php
+                                $statusColors = [
+                                    'pending' => 'badge-warning',
+                                    'assigned' => 'badge-info',
+                                    'accepted' => 'badge-info',
+                                    'en_route' => 'badge-info',
+                                    'arrived' => 'badge-success',
+                                    'completed' => 'badge-success',
+                                    'declined' => 'badge-danger',
+                                    'cancelled' => 'badge-gray',
+                                ];
+                                $statusLabels = [
+                                    'pending' => '🟡 Pending',
+                                    'assigned' => '📋 Assigned',
+                                    'accepted' => '✅ Accepted',
+                                    'en_route' => '🚗 En Route',
+                                    'arrived' => '📍 Arrived',
+                                    'completed' => '✔️ Completed',
+                                    'declined' => '❌ Declined',
+                                    'cancelled' => '🚫 Cancelled',
+                                ];
+                            @endphp
+                            <span class="badge {{ $statusColors[$dispatch->status] ?? 'badge-gray' }}">
+                                {{ $statusLabels[$dispatch->status] ?? ucfirst($dispatch->status) }}
                             </span>
                         </td>
-                        <td>{{ $dispatch->patrolOfficer->firstname ?? 'Unassigned' }} {{ $dispatch->patrolOfficer->lastname ?? '' }}</td>
+                        <td class="officer-cell">{{ $dispatch->patrolOfficer->firstname ?? 'Unassigned' }} {{ $dispatch->patrolOfficer->lastname ?? '' }}</td>
                         <td>
                             <div class="action-group">
                                 <button class="action-btn" onclick="showReportDetails({{ $dispatch->report_id }})" title="View Details">
@@ -412,7 +449,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="10" style="text-align: center; padding: 3rem;">
+                        <td colspan="11" style="text-align: center; padding: 3rem;">
                             <div style="color: #6b7280; font-weight: 500;">No dispatches found</div>
                             <div style="color: #9ca3af; font-size: 0.875rem;">Try adjusting your filters</div>
                         </td>
@@ -445,46 +482,180 @@
 
 @section('scripts')
 <script>
-    window.serverClientTimeOffset = window.serverClientTimeOffset || (Math.floor(Date.now() / 1000) - {{ time() }});
+    // ═══════════════════════════════════════════════
+    // LIVE TIMERS (Response Time & 3-Min Rule)
+    // ═══════════════════════════════════════════════
 
-    // Response Time Timer Logic
-    function updateSLATimers() {
-        const timers = document.querySelectorAll('.sla-timer');
-        const now = Math.floor(Date.now() / 1000) - window.serverClientTimeOffset;
-        
-        timers.forEach(timer => {
-            const createdAt = parseInt(timer.getAttribute('data-created-at'));
-            if (!createdAt) return;
-            
-            const elapsedSeconds = now - createdAt;
-            const threeMinutes = 180;
+    function formatTime(totalSec) {
+        const h = Math.floor(totalSec / 3600);
+        const m = Math.floor((totalSec % 3600) / 60);
+        const s = totalSec % 60;
+        if (h > 0) return `${h}h ${m}m ${s}s`;
+        if (m > 0) return `${m}m ${s}s`;
+        return `${s}s`;
+    }
 
-            function formatTime(totalSec) {
-                const h = Math.floor(totalSec / 3600);
-                const m = Math.floor((totalSec % 3600) / 60);
-                const s = totalSec % 60;
-                if (h > 0) return `${h}h ${m}m ${s}sec`;
-                if (m > 0) return `${m}m ${s}sec`;
-                return `${s}sec`;
-            }
-            
-            if (elapsedSeconds <= threeMinutes) {
-                timer.textContent = formatTime(elapsedSeconds);
-                timer.className = 'sla-timer countdown';
+    function updateTimers() {
+        const now = Math.floor(Date.now() / 1000);
+
+        // Response time timers (counting from accepted_at)
+        document.querySelectorAll('.sla-timer[data-accepted-at]').forEach(timer => {
+            const acceptedAt = parseInt(timer.getAttribute('data-accepted-at'));
+            if (!acceptedAt) return;
+            const elapsed = now - acceptedAt;
+            timer.textContent = '⏱ ' + formatTime(elapsed);
+            timer.className = elapsed <= 180 ? 'sla-timer countdown' : 'sla-timer exceeded';
+        });
+
+        // Rule timers (counting from dispatched_at — waiting for acceptance)
+        document.querySelectorAll('.rule-timer[data-dispatched-at]').forEach(timer => {
+            const dispatchedAt = parseInt(timer.getAttribute('data-dispatched-at'));
+            if (!dispatchedAt) return;
+            const elapsed = now - dispatchedAt;
+            if (elapsed <= 180) {
+                timer.textContent = '⏳ ' + formatTime(180 - elapsed) + ' left';
+                timer.style.color = '#2563eb';
             } else {
-                timer.textContent = formatTime(elapsedSeconds);
-                timer.className = 'sla-timer exceeded';
+                timer.textContent = '❌ Exceeded (' + formatTime(elapsed) + ')';
+                timer.style.color = '#dc2626';
             }
         });
     }
-    
-    // Start timers
-    updateSLATimers();
-    setInterval(updateSLATimers, 1000);
 
-    // Modal Functions
+    updateTimers();
+    setInterval(updateTimers, 1000);
+
+    // ═══════════════════════════════════════════════
+    // SMART POLLING (auto-update without disruption)
+    // ═══════════════════════════════════════════════
+
+    const STATUS_LABELS = {
+        pending: '🟡 Pending', assigned: '📋 Assigned', accepted: '✅ Accepted',
+        en_route: '🚗 En Route', arrived: '📍 Arrived', completed: '✔️ Completed',
+        declined: '❌ Declined', cancelled: '🚫 Cancelled'
+    };
+    const STATUS_COLORS = {
+        pending: 'badge-warning', assigned: 'badge-info', accepted: 'badge-info',
+        en_route: 'badge-info', arrived: 'badge-success', completed: 'badge-success',
+        declined: 'badge-danger', cancelled: 'badge-gray'
+    };
+
+    let isModalOpen = false;
+
+    async function pollDispatches() {
+        // Skip polling if modal is open (user is interacting)
+        if (isModalOpen) return;
+
+        try {
+            const resp = await fetch('/api/dispatches/live-status');
+            if (!resp.ok) return;
+            const json = await resp.json();
+            if (!json.success || !json.data) return;
+
+            json.data.forEach(d => {
+                const row = document.querySelector(`tr[data-dispatch-id="${d.dispatch_id}"]`);
+                if (!row) return;
+
+                // Update Dispatch Status column
+                const statusCell = row.querySelector('.dispatch-status-cell');
+                if (statusCell) {
+                    const label = STATUS_LABELS[d.status] || d.status;
+                    const color = STATUS_COLORS[d.status] || 'badge-gray';
+                    const current = statusCell.textContent.trim();
+                    if (current !== label) {
+                        statusCell.innerHTML = `<span class="badge ${color}">${label}</span>`;
+                        flashCell(statusCell);
+                    }
+                }
+
+                // Update Officer column
+                const officerCell = row.querySelector('.officer-cell');
+                if (officerCell && d.officer_name) {
+                    const currentOfficer = officerCell.textContent.trim();
+                    if (currentOfficer !== d.officer_name && d.officer_name !== '') {
+                        officerCell.textContent = d.officer_name;
+                        flashCell(officerCell);
+                    }
+                }
+
+                // Update Response Time column
+                const rtCell = row.querySelector('.response-time-cell');
+                if (rtCell) {
+                    if (d.arrived_at && d.accepted_at) {
+                        // Arrived — freeze the timer
+                        const acceptedTs = Math.floor(new Date(d.accepted_at).getTime() / 1000);
+                        const arrivedTs = Math.floor(new Date(d.arrived_at).getTime() / 1000);
+                        const elapsed = arrivedTs - acceptedTs;
+                        const newHtml = `<span class="badge badge-success" title="Officer arrived at scene">✅ ${formatTime(elapsed)}</span>`;
+                        if (!rtCell.innerHTML.includes('✅')) {
+                            rtCell.innerHTML = newHtml;
+                            flashCell(rtCell);
+                        }
+                    } else if (d.accepted_at && !d.arrived_at) {
+                        // Accepted but not arrived — show live timer
+                        const acceptedTs = Math.floor(new Date(d.accepted_at).getTime() / 1000);
+                        if (!rtCell.querySelector('.sla-timer[data-accepted-at]')) {
+                            rtCell.innerHTML = `<div class="sla-timer countdown" data-accepted-at="${acceptedTs}" title="Time since officer accepted">⏱ Counting...</div>`;
+                            flashCell(rtCell);
+                        }
+                    }
+                }
+
+                // Update 3-Min Rule column
+                const ruleCell = row.querySelector('.rule-status-cell');
+                if (ruleCell) {
+                    if (d.three_minute_rule_met === true) {
+                        if (!ruleCell.innerHTML.includes('Within 3 Min')) {
+                            ruleCell.innerHTML = '<span class="badge badge-success">✅ Within 3 Min</span>';
+                            flashCell(ruleCell);
+                        }
+                    } else if (d.three_minute_rule_met === false) {
+                        if (!ruleCell.innerHTML.includes('Exceeded')) {
+                            const acceptTime = d.acceptance_time ? ` (${formatTime(d.acceptance_time)})` : '';
+                            ruleCell.innerHTML = `<span class="badge badge-danger">❌ Exceeded${acceptTime}</span>`;
+                            flashCell(ruleCell);
+                        }
+                    } else if (d.accepted_at && d.dispatched_at) {
+                        // Calculate from timestamps
+                        const dispTs = Math.floor(new Date(d.dispatched_at).getTime() / 1000);
+                        const accTs = Math.floor(new Date(d.accepted_at).getTime() / 1000);
+                        const secs = accTs - dispTs;
+                        if (secs <= 180) {
+                            ruleCell.innerHTML = '<span class="badge badge-success">✅ Within 3 Min</span>';
+                        } else {
+                            ruleCell.innerHTML = `<span class="badge badge-danger">❌ Exceeded (${formatTime(secs)})</span>`;
+                        }
+                        // Remove the live rule-timer if it exists
+                        const liveTimer = ruleCell.querySelector('.rule-timer');
+                        if (liveTimer) liveTimer.remove();
+                    }
+                }
+            });
+        } catch (err) {
+            console.warn('Dispatch poll error:', err);
+        }
+    }
+
+    // Flash animation when a cell updates
+    function flashCell(cell) {
+        cell.style.transition = 'background-color 0.3s';
+        cell.style.backgroundColor = '#fef9c3';
+        setTimeout(() => {
+            cell.style.backgroundColor = '';
+            setTimeout(() => { cell.style.transition = ''; }, 300);
+        }, 1500);
+    }
+
+    // Poll every 8 seconds
+    setInterval(pollDispatches, 8000);
+
+    // ═══════════════════════════════════════════════
+    // MODAL FUNCTIONS
+    // ═══════════════════════════════════════════════
+
     function closeModal() {
         document.getElementById('detailsModal').style.display = 'none';
+        isModalOpen = false;
     }
 
     window.onclick = function(event) {
@@ -497,6 +668,7 @@
         const modal = document.getElementById('detailsModal');
         const modalBody = document.getElementById('modalBody');
         modal.style.display = 'block';
+        isModalOpen = true;
         modalBody.innerHTML = '<div style="text-align: center; padding: 2rem; color: #6b7280;">Loading details...</div>';
 
         fetch(`/reports/${reportId}/details`)
@@ -558,7 +730,6 @@
     }
 
     function openTransferModal(reportId) {
-        // Placeholder for transfer functionality
         alert('Transfer/Reassign functionality will be available via the main Reports page or can be implemented here.');
     }
 </script>
