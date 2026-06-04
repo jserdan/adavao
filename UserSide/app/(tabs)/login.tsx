@@ -555,7 +555,26 @@ const Login = () => {
   };
 
   if (isPatrolRedirect) {
-    return <Redirect href="/(patrol)/dashboard" />;
+    return (
+        <View style={{ flex: 1, backgroundColor: '#f5f7fa', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+            <View style={{ backgroundColor: '#fff', padding: 24, borderRadius: 16, alignItems: 'center', width: '100%', elevation: 4 }}>
+                <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#1D3557', marginBottom: 8 }}>Patrol Login Success</Text>
+                <Text style={{ fontSize: 15, color: '#6b7280', textAlign: 'center', marginBottom: 24 }}>
+                    If you are not automatically redirected, please click the button below.
+                </Text>
+                
+                <TouchableOpacity 
+                    style={{ backgroundColor: '#1D3557', paddingVertical: 14, paddingHorizontal: 24, borderRadius: 12, width: '100%', alignItems: 'center', marginBottom: 12 }}
+                    onPress={() => {
+                        console.log('User manually clicking Patrol Dashboard redirect from login');
+                        router.replace('/(patrol)/dashboard' as any);
+                    }}
+                >
+                    <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>Go to Patrol Dashboard</Text>
+                </TouchableOpacity>
+            </View>
+        </View>
+    );
   }
 
   if (isCitizenRedirect) {

@@ -445,7 +445,36 @@ export default function UserDashboard() {
     }
 
     if (isPatrolRedirect) {
-        return <Redirect href="/(patrol)/dashboard" />;
+        return (
+            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                <View style={{ backgroundColor: '#fff', padding: 24, borderRadius: 16, alignItems: 'center', width: '85%', elevation: 4 }}>
+                    <Ionicons name="shield-checkmark" size={64} color="#1D3557" style={{ marginBottom: 16 }} />
+                    <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#1D3557', marginBottom: 8 }}>Patrol Officer</Text>
+                    <Text style={{ fontSize: 15, color: '#6b7280', textAlign: 'center', marginBottom: 24 }}>
+                        You have successfully authenticated as a Patrol Officer.
+                    </Text>
+                    
+                    <TouchableOpacity 
+                        style={{ backgroundColor: '#1D3557', paddingVertical: 14, paddingHorizontal: 24, borderRadius: 12, width: '100%', alignItems: 'center', marginBottom: 12 }}
+                        onPress={() => {
+                            console.log('User manually clicking Patrol Dashboard redirect');
+                            router.replace('/(patrol)/dashboard' as any);
+                        }}
+                    >
+                        <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>Continue to Dashboard</Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity 
+                        style={{ paddingVertical: 12, width: '100%', alignItems: 'center' }}
+                        onPress={() => {
+                            AsyncStorage.clear().then(() => router.replace('/(tabs)/login'));
+                        }}
+                    >
+                        <Text style={{ color: '#E63946', fontSize: 15, fontWeight: '500' }}>Sign Out</Text>
+                    </TouchableOpacity>
+                </View>
+            </View>
+        );
     }
 
     if (!isLoggedIn) {
