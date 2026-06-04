@@ -18,6 +18,9 @@
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "AlertDavao needs your location to help you report crimes in the right area.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "AlertDavao needs your location to help you report crimes in the right area."
+      },
+      "runtimeVersion": {
+        "policy": "appVersion"
       }
     },
     "android": {
@@ -31,10 +34,15 @@
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.INTERNET",
         "android.permission.ACCESS_NETWORK_STATE"
       ],
       "package": "com.imiyataox.alertdavao",
-      "versionCode": 14
+      "versionCode": 14,
+      "runtimeVersion": "1.0.0"
     },
     "web": {
       "bundler": "metro",
@@ -68,6 +76,9 @@
       "eas": {
         "projectId": "8ddf9f8e-385e-4a51-9545-7f68989ae0aa"
       }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/8ddf9f8e-385e-4a51-9545-7f68989ae0aa"
     }
   }
 }
