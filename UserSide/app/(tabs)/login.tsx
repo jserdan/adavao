@@ -439,14 +439,14 @@ const Login = () => {
 
     const effectiveRole = String(user.user_role || user.role || '').toLowerCase();
 
-    // Start inactivity manager (skip for patrol officers — they need persistent sessions)
-    if (effectiveRole !== 'patrol_officer') {
+    // Start inactivity manager (skip for patrol officers - they need persistent sessions)
+    if (!String(effectiveRole).includes('patrol')) {
       const { inactivityManager } = await import('../../services/inactivityManager');
       inactivityManager.start();
     }
 
     // Role-based redirect
-    if (effectiveRole === 'patrol_officer') {
+    if (String(effectiveRole).includes('patrol')) {
       console.log('🚓 Patrol officer detected, redirecting to patrol dashboard');
       try {
         const { initializePushNotifications } = await import('../../services/pushNotificationService');

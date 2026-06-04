@@ -1811,7 +1811,7 @@ export default function ReportCrime() {
                                 const stored = await AsyncStorage.getItem('userData');
                                 const user = stored ? JSON.parse(stored) : null;
                                 const role = String(user?.user_role || user?.role || '').toLowerCase();
-                                if (role === 'patrol_officer') {
+                                if (role.includes('patrol')) {
                                     router.replace('/(patrol)/dashboard' as any);
                                 } else {
                                     router.replace('/(tabs)');
