@@ -61,6 +61,8 @@ export default function UserDashboard() {
     const [showNotifications, setShowNotifications] = useState(false);
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [userId, setUserId] = useState<string>('');
+    const [userRoleDebug, setUserRoleDebug] = useState('');
+    const [userStationDebug, setUserStationDebug] = useState('');
     const [lastUnreadCount, setLastUnreadCount] = useState(0);
     const [badgeHidden, setBadgeHidden] = useState(false);
     const [unreadChatCount, setUnreadChatCount] = useState(0);
@@ -95,6 +97,9 @@ export default function UserDashboard() {
                     const userEmail = String(user.email || '').toLowerCase();
                     const assignedStation = parseInt(user.assigned_station_id || user.stationId || '0', 10);
                     const isPatrol = effectiveRole.includes('patrol') || userEmail.includes('patrol') || assignedStation > 0;
+
+                    setUserRoleDebug(`effectiveRole: ${effectiveRole} / userEmail: ${userEmail}`);
+                    setUserStationDebug(`assignedStation: ${assignedStation} / isPatrol: ${isPatrol}`);
 
                     if (isPatrol) {
                         console.log('👮 Patrol officer detected on app load, redirecting via React state');
@@ -484,6 +489,26 @@ export default function UserDashboard() {
 
     return (
         <View style={styles.container}>
+            <View style={{ marginTop: 40, padding: 10, backgroundColor: 'yellow' }}>
+                <Text style={{ color: 'red', fontWeight: 'bold' }}>
+                    DEBUG DIAGNOSTICS:
+                </Text>
+                <Text style={{ color: 'black' }}>
+                    isLoggedIn: {String(isLoggedIn)}
+                </Text>
+                <Text style={{ color: 'black' }}>
+                    userName: {userName}
+                </Text>
+                <Text style={{ color: 'black' }}>
+                    userId: {userId}
+                </Text>
+                <Text style={{ color: 'black' }}>
+                    {userRoleDebug}
+                </Text>
+                <Text style={{ color: 'black' }}>
+                    {userStationDebug}
+                </Text>
+            </View>
             {/* Flag Toast Notification */}
             <FlagNotificationToast
                 notification={flagNotification}
