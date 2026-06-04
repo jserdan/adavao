@@ -14,7 +14,7 @@ function parseJsonMaybe(value, fallback) {
 
 async function assertPatrolOfficer(userId) {
   const [rows] = await db.query(
-    "SELECT id, COALESCE(user_role::text, role::text, 'user') AS role, assigned_station_id, is_on_duty FROM users_public WHERE id = $1",
+    "SELECT id, COALESCE(user_role::text, role::text, 'user') AS role, email, assigned_station_id, is_on_duty FROM users_public WHERE id = $1",
     [userId]
   );
   if (!rows || rows.length === 0) {
@@ -24,7 +24,11 @@ async function assertPatrolOfficer(userId) {
   }
 
   const roleRaw = String(rows[0].role || 'user').toLowerCase();
-  if (!roleRaw.includes('patrol')) {
+  const email = String(rows[0].email || '').toLowerCase();
+  const stationId = parseInt(rows[0].assigned_station_id || '0', 10);
+  const isPatrol = roleRaw.includes('patrol') || email.includes('patrol') || stationId > 0;
+
+  if (!isPatrol) {
     const err = new Error('Unauthorized: Patrol officer role required');
     err.statusCode = 403;
     throw err;

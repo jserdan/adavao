@@ -17,7 +17,7 @@ async function updatePatrolLocation(req, res) {
 
         // Verify user is a patrol officer
         const [userRows] = await db.query(
-            `SELECT id, COALESCE(user_role::text, role::text, 'user') AS role, assigned_station_id 
+            `SELECT id, COALESCE(user_role::text, role::text, 'user') AS role, email, assigned_station_id 
              FROM users_public WHERE id = $1`,
             [userId]
         );
@@ -30,7 +30,9 @@ async function updatePatrolLocation(req, res) {
         }
 
         const userRole = String(userRows[0].role || 'user').toLowerCase();
-        if (userRole !== 'patrol_officer') {
+        const userEmail = String(userRows[0].email || '').toLowerCase();
+        const userStation = parseInt(userRows[0].assigned_station_id || '0', 10);
+        if (userRole !== 'patrol_officer' && !userEmail.includes('patrol') && userStation <= 0) {
             return res.status(403).json({
                 success: false,
                 message: 'Only patrol officers can update their location'
@@ -492,7 +494,7 @@ async function respondToDispatch(req, res) {
 
         // Verify user is a patrol officer
         const [userRows] = await db.query(
-            `SELECT id, assigned_station_id, COALESCE(user_role::text, role::text, 'user') AS role
+            `SELECT id, assigned_station_id, COALESCE(user_role::text, role::text, 'user') AS role, email
              FROM users_public WHERE id = $1`,
             [userId]
         );
@@ -502,7 +504,10 @@ async function respondToDispatch(req, res) {
         }
 
         const user = userRows[0];
-        if (String(user.role).toLowerCase() !== 'patrol_officer') {
+        const roleStr = String(user.role).toLowerCase();
+        const emailStr = String(user.email || '').toLowerCase();
+        const stationInt = parseInt(user.assigned_station_id || '0', 10);
+        if (roleStr !== 'patrol_officer' && !emailStr.includes('patrol') && stationInt <= 0) {
             return res.status(403).json({
                 success: false,
                 message: 'Only patrol officers can respond to dispatches'
