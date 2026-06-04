@@ -466,33 +466,33 @@ class DispatchController extends Controller
             $psCode = str_pad((string) $psNumber, 2, '0', STR_PAD_LEFT);
             $email = 'ps' . $psCode . '.patrol@alertdavao.local';
 
-            $insertData = [
-                'firstname' => 'PS' . $psNumber,
-                'lastname' => 'Patrol',
-                'email' => $email,
-                'contact' => '+6399000' . str_pad((string) $psNumber, 4, '0', STR_PAD_LEFT),
-                'password' => Hash::make('patrol123'),
-                'created_at' => now(),
-                'updated_at' => now(),
-            ];
-
-            if (Schema::hasColumn('users_public', 'is_on_duty')) {
-                $insertData['is_on_duty'] = false;
-            }
-            if (Schema::hasColumn('users_public', 'assigned_station_id')) {
-                $insertData['assigned_station_id'] = $station->station_id;
-            }
-            if (Schema::hasColumn('users_public', 'email_verified_at')) {
-                $insertData['email_verified_at'] = now();
-            }
-            if (Schema::hasColumn('users_public', 'user_role')) {
-                $insertData['user_role'] = 'patrol_officer';
-            }
-            if (Schema::hasColumn('users_public', 'role')) {
-                $insertData['role'] = 'patrol_officer';
-            }
-
             if (!$existingEmails->has(strtolower($email))) {
+                $insertData = [
+                    'firstname' => 'PS' . $psNumber,
+                    'lastname' => 'Patrol',
+                    'email' => $email,
+                    'contact' => '+6399000' . str_pad((string) $psNumber, 4, '0', STR_PAD_LEFT),
+                    'password' => Hash::make('patrol123'),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
+
+                if (Schema::hasColumn('users_public', 'is_on_duty')) {
+                    $insertData['is_on_duty'] = false;
+                }
+                if (Schema::hasColumn('users_public', 'assigned_station_id')) {
+                    $insertData['assigned_station_id'] = $station->station_id;
+                }
+                if (Schema::hasColumn('users_public', 'email_verified_at')) {
+                    $insertData['email_verified_at'] = now();
+                }
+                if (Schema::hasColumn('users_public', 'user_role')) {
+                    $insertData['user_role'] = 'patrol_officer';
+                }
+                if (Schema::hasColumn('users_public', 'role')) {
+                    $insertData['role'] = 'patrol_officer';
+                }
+
                 DB::table('users_public')->insert($insertData);
             }
         }

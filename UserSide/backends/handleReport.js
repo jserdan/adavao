@@ -377,7 +377,6 @@ async function submitReport(req, res) {
         addValue('contact', guestContact);
         addValue('password', guestPassword);
         addValue('is_verified', false);
-        addValue('email_verified', false);
         addValue('user_role', 'user');
         addValue('role', 'user');
         addValue('email_verified_at', null);
