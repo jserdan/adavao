@@ -34,6 +34,15 @@ export default function TabLayout() {
           if (!isLoginScreen && !isRegisterScreen && !isForgotPasswordScreen && !isReportScreen && !userData) {
             console.log('🔒 Auth guard: No user data, redirecting to login');
             router.replace('/(tabs)/login');
+          } else if (userData) {
+            const user = JSON.parse(userData);
+            const effectiveRole = String(user.user_role || user.role || '').toLowerCase();
+            
+            // Prevent Patrol officers from accessing Citizen tabs like report/history/profile
+            if (effectiveRole.includes('patrol') && !isLoginScreen) {
+              console.log('👮 Auth guard: Patrol officer trying to access citizen tabs, redirecting to patrol layout');
+              router.replace('/(patrol)/dashboard' as any);
+            }
           }
         } catch (error) {
           console.error('Auth guard error:', error);

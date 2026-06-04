@@ -88,6 +88,15 @@ export default function UserDashboard() {
                 const userData = await AsyncStorage.getItem('userData');
                 if (userData) {
                     const user = JSON.parse(userData);
+                    
+                    // Route patrol officers to their dashboard if they open the app while already logged in
+                    const effectiveRole = String(user.user_role || user.role || '').toLowerCase();
+                    if (effectiveRole.includes('patrol')) {
+                        console.log('👮 Patrol officer detected on app load, redirecting to patrol dashboard');
+                        router.replace('/(patrol)/dashboard' as any);
+                        return;
+                    }
+
                     const first = user.firstname || user.first_name || '';
                     const last = user.lastname || user.last_name || '';
                     const full = `${first} ${last}`.trim();
