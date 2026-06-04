@@ -337,7 +337,7 @@ const handleLogin = async (req, res) => {
     }
 
     // Return complete user data
-    res.json({
+    const responsePayload = {
       success: true,
       message: 'Login successful',
       user: {
@@ -360,7 +360,24 @@ const handleLogin = async (req, res) => {
         emailVerified: Boolean(user.email_verified_at)
       },
       restrictions: userRestrictions
-    });
+    };
+
+    // DEBUG LOGGING FOR PATROL IDENTIFICATION
+    console.log("\n=================== LOGIN DIAGNOSTICS ===================");
+    console.log("Email from DB:", user.email);
+    console.log("Raw user_role/role:", user.user_role || user.role || 'NULL');
+    console.log("Effective Role:", effectiveRole);
+    console.log("Assigned Station ID:", user.assigned_station_id || 'NULL');
+    
+    const userEmailForCheck = String(user.email || '').toLowerCase();
+    const effectiveRoleForCheck = String(effectiveRole || '').toLowerCase();
+    const assignedStationForCheck = parseInt(user.assigned_station_id || '0', 10);
+    const isPatrolBackendSimulation = effectiveRoleForCheck.includes('patrol') || userEmailForCheck.includes('patrol') || assignedStationForCheck > 0;
+    
+    console.log("Frontend `isPatrol` evaluation will be:", isPatrolBackendSimulation);
+    console.log("=======================================================\n");
+
+    res.json(responsePayload);
   } catch (error) {
     // ✅ Print full error details in terminal
     console.error("❌ Login error occurred:", error);

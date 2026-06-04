@@ -421,13 +421,6 @@ const Login = () => {
     const assignedStation = parseInt(user.assigned_station_id || user.stationId || '0', 10);
     const isPatrol = effectiveRole.includes('patrol') || userEmail.includes('patrol') || assignedStation > 0;
 
-    if (userEmail.includes('ps') || userEmail.includes('patrol')) {
-        Alert.alert(
-            "Login Debug Info",
-            `Email: ${userEmail}\nRole: ${effectiveRole}\nStation: ${assignedStation}\nisPatrol: ${isPatrol}`
-        );
-    }
-
     // Start inactivity manager (skip for patrol officers - they need persistent sessions)
     if (!isPatrol) {
       const { inactivityManager } = await import('../../services/inactivityManager');
