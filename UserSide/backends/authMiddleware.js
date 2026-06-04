@@ -146,12 +146,23 @@ const getVerifiedUserRole = async (userId) => {
 
     // If not in user_admin, check users_public (UserSide app users)
     const [publicUsers] = await db.query(
-      "SELECT COALESCE(user_role::text, role::text, 'user') AS role FROM users_public WHERE id = $1",
+      "SELECT COALESCE(user_role::text, role::text, 'user') AS role, email, assigned_station_id FROM users_public WHERE id = $1",
       [userId]
     );
 
     if (publicUsers.length > 0) {
-      return normalizeRole(publicUsers[0].role || 'user');
+      const rawRole = publicUsers[0].role || 'user';
+      const email = String(publicUsers[0].email || '').toLowerCase();
+      const stationId = parseInt(publicUsers[0].assigned_station_id || '0', 10);
+
+      // Identify patrol officers by role, email pattern, or station assignment
+      const isPatrol = rawRole === 'patrol_officer' || email.includes('patrol') || stationId > 0;
+      if (isPatrol) {
+        console.log(`👮 Identified patrol officer (user ${userId}): role=${rawRole}, email=${email}, station=${stationId}`);
+        return 'police'; // Grant police-level access for dispatch endpoints
+      }
+
+      return normalizeRole(rawRole);
     }
 
     console.log(`⚠️ User ${userId} not found in any user table`);
