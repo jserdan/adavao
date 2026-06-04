@@ -1560,7 +1560,8 @@
     
     // Refresh every 30 seconds + immediately on socket live updates
     setInterval(checkForNewStats, 30000);
-    window.addEventListener('adminLiveUpdate', () => {
+    window.addEventListener('adminLiveUpdate', (e) => {
+        e.preventDefault();
         checkForNewStats();
         if (document.getElementById('forecast-content')) {
             fetchForecast();

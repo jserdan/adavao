@@ -2848,7 +2848,10 @@ function drawFooter(pdf, pageWidth, pageHeight, margin) {
             autoRefreshInterval = setInterval(checkForNewReports, 15000);
             sortTableByUrgency();
             // Also refresh on live socket events
-            window.addEventListener('adminLiveUpdate', checkForNewReports);
+            window.addEventListener('adminLiveUpdate', function(e) {
+                e.preventDefault(); // Tell app.blade.php we are handling this manually
+                checkForNewReports();
+            });
         });
 
         // Pause auto-refresh when page is hidden

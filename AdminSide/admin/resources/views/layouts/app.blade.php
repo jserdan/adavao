@@ -881,8 +881,52 @@
                     if (document.visibilityState !== 'visible') return;
                     if (now - lastDispatch < 3000) return; // 3s debounce
                     lastDispatch = now;
-                    // Dispatch a lightweight custom event — pages can listen and update their own data
-                    window.dispatchEvent(new CustomEvent('adminLiveUpdate'));
+                    
+                    // Dispatch a lightweight custom event. Pages can listen and update their own data.
+                    // If a page calls e.preventDefault(), it means the page handled the update itself.
+                    const event = new CustomEvent('adminLiveUpdate', { cancelable: true });
+                    const defaultPrevented = !window.dispatchEvent(event);
+                    
+                    if (!defaultPrevented) {
+                        performGenericAutoRefresh();
+                    }
+                };
+
+                const performGenericAutoRefresh = async () => {
+                    // Prevent refresh if a modal is open (so we don't interrupt the admin)
+                    if (document.querySelector('.custom-modal-overlay.active, .modal.show, [class*="modal"][style*="display: block"]')) {
+                        return;
+                    }
+                    
+                    // Prevent refresh if user is typing in an input field
+                    const activeEl = document.activeElement;
+                    if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.tagName === 'SELECT')) {
+                        return;
+                    }
+                    
+                    try {
+                        const url = new URL(window.location.href);
+                        url.searchParams.set('live_update_refresh', Date.now()); // bust cache
+                        
+                        const response = await fetch(url.toString(), {
+                            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                        });
+                        const html = await response.text();
+                        
+                        const parser = new DOMParser();
+                        const doc = parser.parseFromString(html, 'text/html');
+                        
+                        const newMain = doc.querySelector('.main-content');
+                        const oldMain = document.querySelector('.main-content');
+                        
+                        if (newMain && oldMain) {
+                            oldMain.innerHTML = newMain.innerHTML;
+                            // Re-trigger global scripts if needed, though most inline scripts in views
+                            // won't re-run this way. That's why complex pages should preventDefault and handle themselves.
+                        }
+                    } catch (err) {
+                        console.error('Failed generic auto-refresh:', err);
+                    }
                 };
 
                 socket.on('update', handleUpdate);

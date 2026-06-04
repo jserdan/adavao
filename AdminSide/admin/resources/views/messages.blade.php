@@ -775,7 +775,10 @@
         loadConversationsList();
         setInterval(loadConversationsList, 30000); // Check every 30 seconds
         // Also refresh on live socket events
-        window.addEventListener('adminLiveUpdate', loadConversationsList);
+        window.addEventListener('adminLiveUpdate', function(e) {
+            e.preventDefault();
+            loadConversationsList();
+        });
     });
 
     function selectUser(userId, userName) {
@@ -831,7 +834,8 @@
         }
         typingCheckInterval = setInterval(() => checkUserTypingStatus(userId), 3000);
         // Also refresh messages on live socket events
-        window.addEventListener('adminLiveUpdate', () => {
+        window.addEventListener('adminLiveUpdate', (e) => {
+            e.preventDefault();
             if (currentUserId) loadConversation(currentUserId, true);
         });
     }
