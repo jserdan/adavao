@@ -10,7 +10,29 @@ const { sendOtpInternal, verifyOtpInternal } = require('./handleOtp');
 // Handle Google Sign-In - Simplified flow (OPTIMIZED for speed)
 const handleGoogleLogin = async (req, res) => {
   const startTime = Date.now();
-  const { googleId, email, firstName, lastName, profilePicture } = req.body;
+  let { googleId, email, firstName, lastName, profilePicture, accessToken } = req.body;
+
+  // If frontend only sent accessToken (to bypass slow mobile DNS), fetch user info here
+  if (accessToken && (!googleId || !email)) {
+    try {
+      const gRes = await fetch('https://www.googleapis.com/userinfo/v2/me', {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      if (gRes.ok) {
+        const userInfo = await gRes.json();
+        googleId = userInfo.id;
+        email = userInfo.email;
+        firstName = userInfo.given_name;
+        lastName = userInfo.family_name;
+        profilePicture = userInfo.picture;
+      } else {
+        return res.status(401).json({ message: "Invalid access token" });
+      }
+    } catch (err) {
+      console.error("Backend Google fetch error:", err);
+      return res.status(500).json({ message: "Failed to fetch user info from Google" });
+    }
+  }
 
   console.log(`🔵 [Google Login] Starting for ${email}`);
 
