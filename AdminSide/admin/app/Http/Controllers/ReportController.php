@@ -514,7 +514,7 @@ class ReportController extends Controller
 
         // Strict urgency ranking (highest matched category wins for multi-crime reports)
         $CRITICAL_CRIMES = ['Murder', 'Homicide', 'Rape', 'Sexual Assault'];
-        $HIGH_PRIORITY = ['Robbery', 'Physical Injury', 'Domestic Violence', 'Missing Person', 'Harassment'];
+        $HIGH_PRIORITY = ['Robbery', 'Physical Injury', 'Physical Assault', 'Assault', 'Domestic Violence', 'Missing Person', 'Harassment'];
         $MEDIUM_PRIORITY = ['Theft', 'Burglary', 'Break-in', 'Carnapping', 'Motornapping', 'Threats', 'Fraud', 'Cybercrime'];
 
         // Check if any crime type matches Focus Crimes and determine urgency
