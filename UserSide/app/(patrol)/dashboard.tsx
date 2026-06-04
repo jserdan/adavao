@@ -97,7 +97,7 @@ export default function PatrolDashboard() {
 
         const interval = setInterval(() => {
             loadDispatchCounts();
-        }, 2000);
+        }, 30000);
 
         return () => clearInterval(interval);
     }, [userId, stationId]);

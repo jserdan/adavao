@@ -458,7 +458,7 @@ export default function ReportCrime() {
             checkRestrictions();
 
             // Poll every 2 seconds for real-time updates
-            pollInterval = setInterval(checkRestrictions, 2000);
+            pollInterval = setInterval(checkRestrictions, 30000);
 
             return () => {
                 isActive = false;

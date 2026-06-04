@@ -142,7 +142,7 @@ export default function ProfileScreen() {
       }
     };
 
-    const intervalId = setInterval(pollVerificationStatus, 2000); // Poll every 2 seconds
+    const intervalId = setInterval(pollVerificationStatus, 30000); // Poll every 30 seconds
     return () => clearInterval(intervalId);
   }, [user?.id, verificationStatus?.status]);
 

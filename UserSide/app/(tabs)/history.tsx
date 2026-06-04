@@ -186,7 +186,7 @@ const history = () => {
       fetchReports(false);
       const pollInterval = setInterval(() => {
         fetchReports(false);
-      }, 2000);
+      }, 60000);
       return () => clearInterval(pollInterval);
     }, [user])
   );

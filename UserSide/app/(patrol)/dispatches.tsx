@@ -107,7 +107,7 @@ export default function PatrolDispatchesScreen() {
 
         const interval = setInterval(() => {
             loadDispatches(false);
-        }, 2000);
+        }, 30000);
 
         return () => clearInterval(interval);
     }, [userId, stationId, activeTab]);

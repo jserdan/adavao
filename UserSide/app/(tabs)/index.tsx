@@ -336,7 +336,7 @@ export default function UserDashboard() {
             // Auto-refresh announcements every 2 seconds (silent)
             const interval = setInterval(() => {
                 fetchAnnouncements();
-            }, 2000);
+            }, 60000);
 
             return () => clearInterval(interval);
         }

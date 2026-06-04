@@ -126,7 +126,7 @@ const ChatScreen = () => {
         // Poll for new messages every 2 seconds for better real-time feel
         const interval = setInterval(() => {
             fetchMessages(false); // Silent background refresh
-        }, 2000);
+        }, 15000);
 
         // Check typing status every 800ms
         typingCheckInterval = setInterval(() => {

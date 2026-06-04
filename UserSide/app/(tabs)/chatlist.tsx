@@ -166,7 +166,7 @@ export default function ChatList({ navigation }: any) {
         // Set up auto-refresh every 2 seconds (silent background refresh)
         const interval = setInterval(() => {
             fetchConversations(false);
-        }, 2000);
+        }, 30000);
 
         return () => clearInterval(interval);
     }, [user]);

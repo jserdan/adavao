@@ -64,7 +64,7 @@ export default function DispatchDetails() {
 
         const interval = setInterval(() => {
             loadDetails(false);
-        }, 2000);
+        }, 30000);
 
         return () => clearInterval(interval);
     }, [userId, dispatchId]);
