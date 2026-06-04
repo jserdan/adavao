@@ -455,11 +455,13 @@ const Login = () => {
         console.error('Failed to initialize push notifications:', error);
       }
       setTimeout(() => {
+        setIsLoading(false);
         router.replace('/(patrol)/dashboard' as any);
       }, 150);
     } else {
       console.log('🚀 Navigating to /(tabs) (home)...');
       setTimeout(() => {
+        setIsLoading(false);
         router.replace('/(tabs)');
       }, 150);
     }
