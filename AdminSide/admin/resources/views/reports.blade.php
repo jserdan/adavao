@@ -1693,7 +1693,7 @@
                                 </td>
                                 <td>
                                     @php
-                                        $createdAt = optional($report->dispatch)->dispatched_at ?? $report->created_at;
+                                        $startTime = optional($report->dispatch)->accepted_at;
                                         $arrivedAt = optional($report->dispatch)->arrived_at;
                                         
                                         $frozenAt = $arrivedAt;
@@ -1706,29 +1706,34 @@
 
                                         $threeMinutes = 180; // 3 minutes in seconds
 
-                                        if ($frozenAt) {
-                                            // Officer arrived or report handled — freeze timer
-                                            $elapsedSeconds = $createdAt->diffInSeconds($frozenAt);
+                                        if (!$startTime) {
+                                            $timerDisplay = 'Pending Acceptance';
+                                            $timerClass = 'pending';
                                         } else {
-                                            $elapsedSeconds = $createdAt->diffInSeconds(\Carbon\Carbon::now());
-                                        }
+                                            if ($frozenAt) {
+                                                // Officer arrived or report handled — freeze timer
+                                                $elapsedSeconds = $startTime->diffInSeconds($frozenAt);
+                                            } else {
+                                                $elapsedSeconds = $startTime->diffInSeconds(\Carbon\Carbon::now());
+                                            }
 
-                                        $formatTime = function($totalSec) {
-                                            $m = floor($totalSec / 60);
-                                            $s = $totalSec % 60;
-                                            return sprintf('%dm %ds', $m, $s);
-                                        };
+                                            $formatTime = function($totalSec) {
+                                                $m = floor($totalSec / 60);
+                                                $s = $totalSec % 60;
+                                                return sprintf('%dm %ds', $m, $s);
+                                            };
 
-                                        if ($elapsedSeconds <= $threeMinutes) {
-                                            $timerClass = 'countdown'; // Safe styling
-                                            $timerDisplay = $formatTime($elapsedSeconds);
-                                        } else {
-                                            $timerClass = 'exceeded';
-                                            $timerDisplay = $formatTime($elapsedSeconds);
+                                            if ($elapsedSeconds <= $threeMinutes) {
+                                                $timerClass = 'countdown'; // Safe styling
+                                                $timerDisplay = $formatTime($elapsedSeconds);
+                                            } else {
+                                                $timerClass = 'exceeded';
+                                                $timerDisplay = $formatTime($elapsedSeconds);
+                                            }
                                         }
                                     @endphp
                                     <span class="sla-timer {{ $timerClass }}" 
-                                          data-created-at="{{ $createdAt->timestamp }}"
+                                          data-created-at="{{ $startTime ? \Carbon\Carbon::parse($startTime)->timestamp : '' }}"
                                           data-arrived-at="{{ $frozenAt ? \Carbon\Carbon::parse($frozenAt)->timestamp : '' }}"
                                           data-report-id="{{ $report->report_id }}">
                                         {{ $timerDisplay }}
