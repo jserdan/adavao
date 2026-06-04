@@ -1695,11 +1695,20 @@
                                     @php
                                         $createdAt = optional($report->dispatch)->dispatched_at ?? $report->created_at;
                                         $arrivedAt = optional($report->dispatch)->arrived_at;
+                                        
+                                        $frozenAt = $arrivedAt;
+                                        if (!$frozenAt && in_array($report->status, ['resolved', 'completed'])) {
+                                            $frozenAt = $report->updated_at;
+                                        }
+                                        if (!$frozenAt && in_array($report->is_valid, ['valid', 'invalid'])) {
+                                            $frozenAt = $report->validated_at ?? $report->updated_at;
+                                        }
+
                                         $threeMinutes = 180; // 3 minutes in seconds
 
-                                        if ($arrivedAt) {
-                                            // Officer arrived — freeze timer at arrival time
-                                            $elapsedSeconds = $createdAt->diffInSeconds($arrivedAt);
+                                        if ($frozenAt) {
+                                            // Officer arrived or report handled — freeze timer
+                                            $elapsedSeconds = $createdAt->diffInSeconds($frozenAt);
                                         } else {
                                             $elapsedSeconds = $createdAt->diffInSeconds(\Carbon\Carbon::now());
                                         }
@@ -1720,7 +1729,7 @@
                                     @endphp
                                     <span class="sla-timer {{ $timerClass }}" 
                                           data-created-at="{{ $createdAt->timestamp }}"
-                                          data-arrived-at="{{ $arrivedAt ? \Carbon\Carbon::parse($arrivedAt)->timestamp : '' }}"
+                                          data-arrived-at="{{ $frozenAt ? \Carbon\Carbon::parse($frozenAt)->timestamp : '' }}"
                                           data-report-id="{{ $report->report_id }}">
                                         {{ $timerDisplay }}
                                     </span>
@@ -1731,8 +1740,12 @@
                                         $isValid = $report->is_valid;
                                         
                                         if ($isValid === 'checking_for_report_validity' || !$validatedAt) {
-                                            // Still pending validation - check if already past 3 min
-                                            $elapsedSinceCreation = $createdAt->diffInSeconds(\Carbon\Carbon::now());
+                                            // Still pending validation
+                                            if (in_array($report->status, ['resolved', 'completed'])) {
+                                                $elapsedSinceCreation = $createdAt->diffInSeconds($report->updated_at);
+                                            } else {
+                                                $elapsedSinceCreation = $createdAt->diffInSeconds(\Carbon\Carbon::now());
+                                            }
                                             if ($elapsedSinceCreation > 180) {
                                                 $ruleStatus = 'Exceeded';
                                                 $ruleClass = 'exceeded';
@@ -1755,7 +1768,8 @@
                                     <span class="rule-status {{ $ruleClass }}"
                                           data-rule-created-at="{{ $createdAt->timestamp }}"
                                           data-rule-validated-at="{{ $validatedAt ? \Carbon\Carbon::parse($validatedAt)->timestamp : '' }}"
-                                          data-rule-is-valid="{{ $isValid }}">
+                                          data-rule-is-valid="{{ $isValid }}"
+                                          data-report-status="{{ $report->status }}">
                                         {{ $ruleStatus }}
                                     </span>
                                 </td>
@@ -2089,9 +2103,10 @@ function updateSLATimers() {
         if (!createdAt) return;
 
         const arrivedAt = timer.getAttribute('data-arrived-at');
-        // If officer has arrived, freeze the timer at arrival time
+        // If officer has arrived or report manually resolved, freeze the timer
         const endTime = arrivedAt ? parseInt(arrivedAt) : now;
-        const elapsedSeconds = endTime - createdAt;
+        let elapsedSeconds = endTime - createdAt;
+        if (elapsedSeconds < 0) elapsedSeconds = 0;
         const threeMinutes = 180;
         
         function formatTime(totalSec) {
@@ -2127,11 +2142,13 @@ function updateRuleStatuses() {
         const createdAt = parseInt(el.getAttribute('data-rule-created-at'));
         const validatedAt = el.getAttribute('data-rule-validated-at');
         const isValid = el.getAttribute('data-rule-is-valid');
+        const rStatus = el.getAttribute('data-report-status');
         
         if (!createdAt) return;
         
         // If already validated, status is frozen
         if (validatedAt) return;
+        if (rStatus === 'resolved' || rStatus === 'completed') return;
         
         // If still pending/checking, auto-update to exceeded when past 3 min
         const isPendingRule =
