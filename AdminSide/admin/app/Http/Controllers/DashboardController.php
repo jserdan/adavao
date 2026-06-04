@@ -247,4 +247,35 @@ class DashboardController extends Controller
 
         return response()->json($data);
     }
+
+    /**
+     * Lightweight JSON counts for dashboard stat card polling
+     */
+    public function getCounts()
+    {
+        $user = auth()->user();
+        $isSuperAdmin = $user && $user->email === 'alertdavao.ph@gmail.com';
+        $stationId = $user->station_id ?? null;
+
+        $base = DB::table('reports');
+        if (!$isSuperAdmin && $stationId) {
+            $base = $base->where('assigned_station_id', $stationId);
+        }
+
+        $total      = (clone $base)->count();
+        $pending    = (clone $base)->where('status', 'pending')->count();
+        $investigating = (clone $base)->where('status', 'investigating')->count();
+        $resolved   = (clone $base)->where('status', 'resolved')->count();
+        $today      = (clone $base)->whereDate('created_at', \Carbon\Carbon::today())->count();
+        $fake       = (clone $base)->where('is_valid', 'invalid')->count();
+
+        return response()->json([
+            'totalReports'    => $total,
+            'pendingReports'  => $pending,
+            'investigatingReports' => $investigating,
+            'resolvedReports' => $resolved,
+            'reportsToday'    => $today,
+            'fakeReports'     => $fake,
+        ]);
+    }
 }

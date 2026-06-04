@@ -269,5 +269,11 @@ setInterval(() => {
     console.log('🔄 Auto-refreshing verification history...');
     loadHistory();
 }, 10000);
+
+// Instant update on Socket.io push
+window.addEventListener('adminLiveUpdate', (e) => {
+    e.preventDefault();
+    loadHistory();
+});
 </script>
 @endsection

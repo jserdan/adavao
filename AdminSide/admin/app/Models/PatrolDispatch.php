@@ -89,8 +89,9 @@ class PatrolDispatch extends Model
      */
     public function calculateResponseTime(): void
     {
-        if ($this->arrived_at && $this->dispatched_at) {
-            $this->response_time = $this->dispatched_at->diffInSeconds($this->arrived_at);
+        if ($this->arrived_at && $this->accepted_at) {
+            // Response time = acceptance to arrival (not dispatch to arrival)
+            $this->response_time = $this->accepted_at->diffInSeconds($this->arrived_at);
             $this->three_minute_rule_time = $this->response_time;
             $this->three_minute_rule_met = $this->response_time <= 180; // 3 minutes = 180 seconds
             $this->save();

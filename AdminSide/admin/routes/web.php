@@ -189,6 +189,7 @@ Route::post('/api/otp/verify', [OtpController::class, 'verifyOtp'])->name('otp.v
 Route::middleware(['auth'])->group(function () {
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/api/crime-data', [DashboardController::class, 'getCrimeData'])->name('crime.data');
+    Route::get('/api/reports/counts', [DashboardController::class, 'getCounts'])->name('api.reports.counts');
     Route::post('/announcements', [AnnouncementController::class, 'store'])->name('announcements.store');
 
     // Profile Routes

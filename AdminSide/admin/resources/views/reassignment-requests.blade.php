@@ -566,5 +566,14 @@ function showError(message) {
 document.addEventListener('DOMContentLoaded', function() {
     loadRequests();
 });
+
+// Auto-refresh every 15 seconds
+setInterval(loadRequests, 15000);
+
+// Instant update on Socket.io push
+window.addEventListener('adminLiveUpdate', (e) => {
+    e.preventDefault();
+    loadRequests();
+});
 </script>
 @endsection

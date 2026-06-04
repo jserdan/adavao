@@ -649,6 +649,12 @@
     // Poll every 8 seconds
     setInterval(pollDispatches, 8000);
 
+    // Instant update on Socket.io push from backend
+    window.addEventListener('adminLiveUpdate', (e) => {
+        e.preventDefault(); // prevent generic full-page refresh
+        pollDispatches();
+    });
+
     // ═══════════════════════════════════════════════
     // MODAL FUNCTIONS
     // ═══════════════════════════════════════════════
