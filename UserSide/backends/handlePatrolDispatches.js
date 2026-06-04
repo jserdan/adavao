@@ -50,7 +50,8 @@ async function getMyDispatches(req, res) {
     const userId = req.query.userId || req.headers['x-user-id'] || req.body?.userId;
     if (!userId) return res.status(400).json({ success: false, message: 'userId is required' });
 
-    await assertPatrolOfficer(userId);
+    const officer = await assertPatrolOfficer(userId);
+    const stationId = parseInt(officer.assigned_station_id || '0', 10);
 
     const [rows] = await db.query(
       `SELECT
@@ -99,6 +100,7 @@ async function getMyDispatches(req, res) {
       LEFT JOIN report_media rm ON r.report_id = rm.report_id
       LEFT JOIN users_public u ON d.patrol_officer_id = u.id
       WHERE d.status NOT IN ('completed', 'cancelled', 'declined')
+        AND (d.station_id = $1 OR $1 = 0)
       GROUP BY
         d.dispatch_id,
         d.report_id,
@@ -127,9 +129,8 @@ async function getMyDispatches(req, res) {
         l.barangay,
         l.reporters_address,
         u.firstname,
-        u.lastname
-      ORDER BY d.dispatched_at DESC`
-    );
+      ORDER BY d.dispatched_at DESC`,
+      [stationId]
 
     const formatted = rows.map((row) => {
       const media = parseJsonMaybe(row.media, []);
@@ -357,7 +358,7 @@ async function acceptDispatch(req, res) {
       [dispatchId]
     );
 
-    return res.json({ success: true, message: 'Dispatch accepted', data: { acceptance_time: acceptanceTime, three_minute_rule_met: threeMinuteRuleMet } });
+    return res.json({ success: true, message: 'Dispatch accepted', data: { acceptance_time: acceptanceTime } });
   } catch (e) {
     const statusCode = typeof e?.statusCode === 'number' ? e.statusCode : 500;
     return res.status(statusCode).json({ success: false, message: e?.message || 'Failed to accept dispatch' });

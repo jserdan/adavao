@@ -583,8 +583,7 @@ async function respondToDispatch(req, res) {
             message: 'Successfully responded to dispatch',
             data: {
                 dispatch_id: dispatchId,
-                acceptance_time: acceptanceTimeSeconds,
-                three_minute_rule_met: threeMinuteRuleMet
+                acceptance_time: acceptanceTimeSeconds
             }
         });
 

@@ -4983,21 +4983,37 @@ function generatePDF(report) {
 
     async function fetchReportUpdates() {
         try {
-            const response = await fetch('/api/reports/updates', {
-                headers: {
-                    'Accept': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                }
-            });
-
-            if (!response.ok) throw new Error('Failed to fetch updates');
-
-            const data = await response.json();
-
-            if (data.success && data.reports) {
-                updateReportRows(data.reports);
-                updateTabCounts(data.counts);
+            // Prevent refresh if a modal is open
+            if (document.querySelector('.custom-modal-overlay.active, .modal.show, [class*="modal"][style*="display: block"]') || document.getElementById('reportModal').style.display === 'flex' || document.getElementById('dispatchModal').style.display === 'flex') {
+                return;
             }
+
+            const url = new URL(window.location.href);
+            url.searchParams.set('live_update_refresh', Date.now());
+            
+            const response = await fetch(url.toString(), {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            const html = await response.text();
+            
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            
+            // Swap table container to get new rows
+            const newTable = doc.querySelector('.reports-table-container');
+            const oldTable = document.querySelector('.reports-table-container');
+            
+            if (newTable && oldTable) {
+                oldTable.innerHTML = newTable.innerHTML;
+            }
+            
+            // Swap counts
+            const newCounts = doc.querySelector('.tabs');
+            const oldCounts = document.querySelector('.tabs');
+            if (newCounts && oldCounts) {
+                oldCounts.innerHTML = newCounts.innerHTML;
+            }
+            
         } catch (error) {
             console.warn('Auto-refresh error:', error.message);
         }
