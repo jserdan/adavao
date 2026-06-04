@@ -1743,6 +1743,7 @@
                                     @php
                                         $validatedAt = $report->validated_at;
                                         $isValid = $report->is_valid;
+                                        $createdAt = optional($report->dispatch)->dispatched_at ?? $report->created_at;
                                         
                                         if ($isValid === 'checking_for_report_validity' || !$validatedAt) {
                                             // Still pending validation
