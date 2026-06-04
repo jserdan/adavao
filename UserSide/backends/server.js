@@ -390,7 +390,7 @@ app.post('/api/dispatch/admin-sync', async (req, res) => {
         let stationTokens = [];
         if (stationId) {
           const [officers] = await db.query(
-            `SELECT push_token FROM users_public WHERE LOWER(COALESCE(user_role::text, role::text, '')) = 'patrol_officer' AND assigned_station_id = $1 AND is_on_duty = true AND push_token IS NOT NULL`,
+            `SELECT push_token FROM users_public WHERE LOWER(COALESCE(user_role::text, role::text, '')) LIKE '%patrol%' AND assigned_station_id = $1 AND is_on_duty = true AND push_token IS NOT NULL`,
             [stationId]
           );
           stationTokens = (officers || []).map(o => o.push_token).filter(Boolean);

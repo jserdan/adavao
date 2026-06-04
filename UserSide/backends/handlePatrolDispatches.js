@@ -24,7 +24,7 @@ async function assertPatrolOfficer(userId) {
   }
 
   const roleRaw = String(rows[0].role || 'user').toLowerCase();
-  if (roleRaw !== 'patrol_officer') {
+  if (!roleRaw.includes('patrol')) {
     const err = new Error('Unauthorized: Patrol officer role required');
     err.statusCode = 403;
     throw err;
