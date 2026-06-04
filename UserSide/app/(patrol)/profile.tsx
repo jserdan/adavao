@@ -176,16 +176,10 @@ export default function PatrolProfile() {
             // Clear local storage thoroughly to prevent sticky Google sessions
             await AsyncStorage.clear();
 
-            // Navigate directly to login screen
-            if (router.dismissAll) {
-                router.dismissAll();
-            }
+            // Navigate to login screen
             router.replace('/(tabs)/login');
         } catch (error) {
             console.error('Error logging out:', error);
-            if (router.dismissAll) {
-                router.dismissAll();
-            }
             router.replace('/(tabs)/login');
         }
     };

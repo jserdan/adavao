@@ -3465,13 +3465,13 @@ function drawFooter(pdf, pageWidth, pageHeight, margin) {
 
                             const officerName = dispatch.officer_name || (dispatch.patrol_officer ? `${dispatch.patrol_officer.firstname || ''} ${dispatch.patrol_officer.lastname || ''}`.trim() : 'Unknown Officer');
                             
-                            // Calculate response time from report creation to officer arrival
+                            // Calculate response time from officer acceptance to arrival
                             let responseTimeDisp = '—';
-                            if (report.created_at) {
-                                const createdAt = parseServerTime(report.created_at, false); // Laravel
+                            if (dispatch.accepted_at) {
+                                const acceptedAt = parseServerTime(dispatch.accepted_at, true); // Node
                                 const endTime = dispatch.arrived_at ? parseServerTime(dispatch.arrived_at, true) : new Date();
                                 
-                                const elapsedSec = Math.floor((endTime - createdAt) / 1000);
+                                const elapsedSec = Math.floor((endTime - acceptedAt) / 1000);
                                 const isNegative = elapsedSec < 0;
                                 const absSec = Math.abs(elapsedSec);
                                 const h = Math.floor(absSec / 3600);
@@ -3480,6 +3480,8 @@ function drawFooter(pdf, pageWidth, pageHeight, margin) {
                                 
                                 const sign = isNegative ? '-' : '';
                                 responseTimeDisp = sign + (h > 0 ? `${h}h ${m}m ${s}s` : (m > 0 ? `${m}m ${s}s` : `${s}s`));
+                            } else {
+                                responseTimeDisp = 'Pending Acceptance';
                             }
                             const validityLabel = dispatch.is_valid === true || dispatch.is_valid === 'true' ? '✅ Valid' : dispatch.is_valid === false || dispatch.is_valid === 'false' ? '❌ Invalid' : '⏳ Pending';
                             const validityColor = dispatch.is_valid === true || dispatch.is_valid === 'true' ? '#065f46' : dispatch.is_valid === false || dispatch.is_valid === 'false' ? '#991b1b' : '#6b7280';
