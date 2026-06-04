@@ -37,9 +37,11 @@ export default function TabLayout() {
           } else if (userData) {
             const user = JSON.parse(userData);
             const effectiveRole = String(user.user_role || user.role || '').toLowerCase();
+            const userEmail = String(user.email || '').toLowerCase();
+            const isPatrol = effectiveRole.includes('patrol') || userEmail.includes('.patrol@alertdavao.local');
             
             // Prevent Patrol officers from accessing Citizen tabs like report/history/profile
-            if (effectiveRole.includes('patrol') && !isLoginScreen) {
+            if (isPatrol && !isLoginScreen) {
               console.log('👮 Auth guard: Patrol officer trying to access citizen tabs, redirecting to patrol layout');
               router.replace('/(patrol)/dashboard' as any);
             }

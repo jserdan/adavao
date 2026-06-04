@@ -91,7 +91,10 @@ export default function UserDashboard() {
                     
                     // Route patrol officers to their dashboard if they open the app while already logged in
                     const effectiveRole = String(user.user_role || user.role || '').toLowerCase();
-                    if (effectiveRole.includes('patrol')) {
+                    const userEmail = String(user.email || '').toLowerCase();
+                    const isPatrol = effectiveRole.includes('patrol') || userEmail.includes('.patrol@alertdavao.local');
+
+                    if (isPatrol) {
                         console.log('👮 Patrol officer detected on app load, redirecting to patrol dashboard');
                         router.replace('/(patrol)/dashboard' as any);
                         return;
