@@ -4975,7 +4975,8 @@ function generatePDF(report) {
 
         // Refresh every 20s + immediately on socket live updates
         autoRefreshInterval = setInterval(fetchReportUpdates, 20000);
-        window.addEventListener('adminLiveUpdate', () => {
+        window.addEventListener('adminLiveUpdate', (e) => {
+            e.preventDefault();
             if (document.visibilityState === 'visible') fetchReportUpdates();
         });
     }
