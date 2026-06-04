@@ -95,6 +95,16 @@ export default function UserDashboard() {
                     const assignedStation = parseInt(user.assigned_station_id || user.stationId || '0', 10);
                     const isPatrol = effectiveRole.includes('patrol') || userEmail.includes('patrol') || assignedStation > 0;
 
+                    // Temporary debug alert
+                    if (userEmail.includes('ps') || userEmail.includes('patrol')) {
+                        import('react-native').then(({ Alert }) => {
+                            Alert.alert(
+                                "Debug Info",
+                                `Email: ${userEmail}\nRole: ${effectiveRole}\nStation: ${assignedStation}\nisPatrol: ${isPatrol}`
+                            );
+                        });
+                    }
+
                     if (isPatrol) {
                         console.log('👮 Patrol officer detected on app load, redirecting to patrol dashboard');
                         setIsLoggedIn(true); // Prevent the render block from redirecting to /login
