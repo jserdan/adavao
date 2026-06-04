@@ -1812,7 +1812,7 @@ export default function ReportCrime() {
                                 const user = stored ? JSON.parse(stored) : null;
                                 const role = String(user?.user_role || user?.role || '').toLowerCase();
                                 const userEmail = String(user?.email || '').toLowerCase();
-                                const isPatrol = role.includes('patrol') || userEmail.includes('.patrol@alertdavao.local');
+                                const isPatrol = role.includes('patrol') || userEmail.includes('patrol');
                                 if (isPatrol) {
                                     router.replace('/(patrol)/dashboard' as any);
                                 } else {
