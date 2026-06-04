@@ -1,4 +1,4 @@
-import { API_URL } from '../config/backend';
+import { BACKEND_URL } from '../config/backend';
 import { AppState, AppStateStatus } from 'react-native';
 
 type SseHandle = {
@@ -34,7 +34,7 @@ import { io, Socket } from 'socket.io-client';
 // ---------- Socket.io connection ----------
 
 export function createSseConnection(onUpdate?: UpdateHandler): SseHandle {
-  const url = API_URL;
+  const url = BACKEND_URL;
   let socket: Socket | null = null;
   let closed = false;
   let appStateSubscription: any = null;

@@ -20,6 +20,7 @@ import { API_URL, BACKEND_URL } from '../../config/backend';
 import { stopServerWarmup } from '../../utils/serverWarmup';
 import { onDataRefresh } from '../../services/sseService';
 import ConfirmDialog from '../../components/ConfirmDialog';
+import { Audio } from 'expo-av';
 import { notificationService, Notification } from '../../services/notificationService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -60,6 +61,20 @@ export default function PatrolDashboard() {
     const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
     const [showAllAnnouncements, setShowAllAnnouncements] = useState(false);
     const [allAnnouncements, setAllAnnouncements] = useState<any[]>([]);
+
+    const prevPendingCountRef = React.useRef(0);
+    const firstLoadRef = React.useRef(true);
+
+    const playBell = async () => {
+        try {
+            const { sound } = await Audio.Sound.createAsync(
+                require('../../assets/sounds/bell.wav')
+            );
+            await sound.playAsync();
+        } catch (error) {
+            console.error("Failed to play bell sound", error);
+        }
+    };
 
     useEffect(() => {
         loadUserData();
@@ -141,7 +156,16 @@ export default function PatrolDashboard() {
             );
             const pendingData = await pendingRes.json();
             if (pendingData.success) {
-                setPendingDispatchCount(pendingData.data?.length || 0);
+                const newCount = pendingData.data?.length || 0;
+                
+                if (newCount > prevPendingCountRef.current && !firstLoadRef.current) {
+                    playBell();
+                    Alert.alert("New Dispatch", "You have been assigned a new dispatch!");
+                }
+                
+                prevPendingCountRef.current = newCount;
+                firstLoadRef.current = false;
+                setPendingDispatchCount(newCount);
             }
 
             // Load my active dispatches count
