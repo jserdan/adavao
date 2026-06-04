@@ -16,7 +16,7 @@ import {
 } from "react-native";
 import Checkbox from 'expo-checkbox';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useRouter } from "expo-router";
+import { useRouter, Redirect } from "expo-router";
 import { useFocusEffect } from '@react-navigation/native';
 import { useUser } from '../../contexts/UserContext';
 import { BACKEND_URL } from '../../config/backend';
@@ -51,6 +51,8 @@ const Login = () => {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isPatrolRedirect, setIsPatrolRedirect] = useState(false);
+  const [isCitizenRedirect, setIsCitizenRedirect] = useState(false);
   const [showAnonymousModal, setShowAnonymousModal] = useState(false);
 
   // Recaptcha State (Removed)
@@ -429,23 +431,17 @@ const Login = () => {
 
     // Role-based redirect
     if (isPatrol) {
-      console.log('🚓 Patrol officer detected, redirecting to patrol dashboard');
+      console.log('🚓 Patrol officer detected, redirecting via React state');
       try {
         const { initializePushNotifications } = await import('../../services/pushNotificationService');
         await initializePushNotifications(user.id);
       } catch (error) {
         console.error('Failed to initialize push notifications:', error);
       }
-      setTimeout(() => {
-        setIsLoading(false);
-        router.replace('/(patrol)/dashboard' as any);
-      }, 150);
+      setIsPatrolRedirect(true);
     } else {
-      console.log('🚀 Navigating to /(tabs) (home)...');
-      setTimeout(() => {
-        setIsLoading(false);
-        router.replace('/(tabs)');
-      }, 150);
+      console.log('👤 Regular user detected, checking verification status');
+      setIsCitizenRedirect(true);
     }
   };
 
@@ -557,6 +553,14 @@ const Login = () => {
   const handleSignUp = () => {
     router.push('/(tabs)/register');
   };
+
+  if (isPatrolRedirect) {
+    return <Redirect href="/(patrol)/dashboard" />;
+  }
+
+  if (isCitizenRedirect) {
+    return <Redirect href="/(tabs)" />;
+  }
 
   return (
     <KeyboardAvoidingView

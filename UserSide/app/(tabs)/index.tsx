@@ -12,7 +12,7 @@ import {
     Image,
     Linking,
 } from 'react-native';
-import { useRouter, Link } from 'expo-router';
+import { useRouter, Link, Redirect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
@@ -56,6 +56,7 @@ export default function UserDashboard() {
     const [loading, setLoading] = useState(false);
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+    const [isPatrolRedirect, setIsPatrolRedirect] = useState(false);
     const [showLogoutDialog, setShowLogoutDialog] = useState(false);
     const [showNotifications, setShowNotifications] = useState(false);
     const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -96,9 +97,8 @@ export default function UserDashboard() {
                     const isPatrol = effectiveRole.includes('patrol') || userEmail.includes('patrol') || assignedStation > 0;
 
                     if (isPatrol) {
-                        console.log('👮 Patrol officer detected on app load, redirecting to patrol dashboard');
-                        setIsLoggedIn(true); // Prevent the render block from redirecting to /login
-                        setTimeout(() => router.replace('/(patrol)/dashboard' as any), 100);
+                        console.log('👮 Patrol officer detected on app load, redirecting via React state');
+                        setIsPatrolRedirect(true);
                         return;
                     }
 
@@ -442,6 +442,10 @@ export default function UserDashboard() {
 
     if (isLoading) {
         return null;
+    }
+
+    if (isPatrolRedirect) {
+        return <Redirect href="/(patrol)/dashboard" />;
     }
 
     if (!isLoggedIn) {
