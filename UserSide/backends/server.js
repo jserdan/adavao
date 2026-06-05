@@ -1023,6 +1023,44 @@ const { runMigrations } = require('./runMigrations');
     console.log(`🚀 Server running at http://localhost:${PORT}`);
     // console.log(`   Local Network: http://${require('ip').address()}:${PORT}`);
 
+    // Purge database reports leaving only report ID 18572 on boot
+    console.log("🧹 Running startup database reports purge (keeping only ID 18572)...");
+    try {
+      const { Pool } = require('pg');
+      const pool = new Pool({
+        connectionString: process.env.DATABASE_URL,
+        ssl: { rejectUnauthorized: false }
+      });
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const r1 = await client.query('DELETE FROM report_media WHERE report_id != 18572');
+        const r2 = await client.query('DELETE FROM patrol_dispatches WHERE report_id != 18572');
+        const r3 = await client.query('DELETE FROM report_timelines WHERE report_id != 18572');
+        const r4 = await client.query('DELETE FROM messages WHERE report_id IS NOT NULL AND report_id != 18572');
+        const r5 = await client.query('DELETE FROM reports WHERE report_id != 18572');
+        const r6 = await client.query(`
+          DELETE FROM locations 
+          WHERE location_id NOT IN (
+            SELECT DISTINCT location_id 
+            FROM reports 
+            WHERE location_id IS NOT NULL
+          )
+        `);
+        await client.query('COMMIT');
+        console.log(`✅ Startup database purge completed:`);
+        console.log(`   - Media: ${r1.rowCount}, Dispatches: ${r2.rowCount}, Timelines: ${r3.rowCount}, Messages: ${r4.rowCount}, Reports: ${r5.rowCount}, Locations: ${r6.rowCount}`);
+      } catch (dbErr) {
+        await client.query('ROLLBACK');
+        console.warn("⚠️ Database purge transaction failed:", dbErr.message);
+      } finally {
+        client.release();
+        await pool.end();
+      }
+    } catch (err) {
+      console.warn("⚠️ Failed to run startup database purge:", err.message);
+    }
+
     // Auto-reset verification status on startup (as requested)
     // This ensures all users are set to 'unverified' when the server restarts/redeploys
     console.log("🔄 Running centralized verification reset script...");
