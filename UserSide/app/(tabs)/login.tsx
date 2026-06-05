@@ -925,7 +925,7 @@ const Login = () => {
                 style={{ backgroundColor: '#1D3557', padding: 16, borderRadius: 8, alignItems: 'center', marginTop: 8 }}
                 onPress={() => {
                   setShowAnonymousModal(false);
-                  router.push({ pathname: '/report', params: { anonymous: 'true' } });
+                  router.push({ pathname: '/(tabs)/report', params: { anonymous: 'true' } });
                 }}
               >
                 <Text style={{ color: 'white', fontSize: 16, fontWeight: '600' }}>I Understand, Continue</Text>
