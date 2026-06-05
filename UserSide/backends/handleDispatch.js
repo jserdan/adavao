@@ -427,10 +427,9 @@ async function getPendingDispatchesForStation(req, res) {
             });
         }
 
-        // Show ALL active dispatches to ALL patrol officers (broadcast model)
-        // Officers can see pending, assigned, accepted, en_route, arrived statuses
-        const [rows] = await db.query(
-            `SELECT
+        // Show dispatches relevant to this officer (broadcast pending or assigned/accepted by them)
+        let queryStr = `
+            SELECT
                 d.dispatch_id,
                 d.report_id,
                 d.station_id,
@@ -458,8 +457,21 @@ async function getPendingDispatchesForStation(req, res) {
              LEFT JOIN police_stations ps ON d.station_id = ps.station_id
              LEFT JOIN users_public u ON d.patrol_officer_id = u.id
              WHERE d.status NOT IN ('completed', 'cancelled', 'declined')
-             ORDER BY d.dispatched_at DESC`
-        );
+        `;
+
+        const params = [];
+        if (userId) {
+            queryStr += ` AND (
+                d.status = 'pending'
+                OR (d.status = 'assigned' AND d.patrol_officer_id = $1)
+                OR (d.status IN ('accepted', 'en_route', 'arrived') AND d.patrol_officer_id = $1)
+            )`;
+            params.push(userId);
+        }
+
+        queryStr += ` ORDER BY d.dispatched_at DESC`;
+
+        const [rows] = await db.query(queryStr, params);
 
         // Decrypt encrypted fields before sending to client
         const decryptedRows = rows.map(row => ({

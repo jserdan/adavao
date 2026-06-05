@@ -865,7 +865,13 @@
             // Socket.io live update — dispatches a custom event instead of full page reload
             (function initSocketAutoRefresh() {
                 if (typeof io === 'undefined') return;
-                const apiUrl = "{{ config('app.node_backend_url', 'https://adavao-1-mawm.onrender.com') }}";
+                
+                let apiUrl = "{{ config('app.node_backend_url') }}";
+                if (!apiUrl || apiUrl.includes('localhost') || apiUrl.includes('127.0.0.1')) {
+                    apiUrl = 'https://adavao-1-mawm.onrender.com';
+                }
+                
+                console.log('🔌 Socket.io: Connecting to', apiUrl);
                 
                 let lastDispatch = 0;
                 
@@ -874,7 +880,20 @@
                     reconnectionDelayMax: 5000,
                 });
 
-                const handleUpdate = () => {
+                socket.on('connect', () => {
+                    console.log('🔌 Socket.io: Connected successfully as', socket.id);
+                });
+
+                socket.on('connect_error', (error) => {
+                    console.error('🔌 Socket.io: Connection error:', error.message);
+                });
+
+                socket.on('disconnect', (reason) => {
+                    console.warn('🔌 Socket.io: Disconnected. Reason:', reason);
+                });
+
+                const handleUpdate = (data) => {
+                    console.log('🔌 Socket.io: Received update event:', data);
                     const now = Date.now();
                     if (document.visibilityState !== 'visible') return;
                     if (now - lastDispatch < 3000) return; // 3s debounce

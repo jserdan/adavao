@@ -156,7 +156,9 @@ export default function PatrolDashboard() {
             );
             const pendingData = await pendingRes.json();
             if (pendingData.success) {
-                const newCount = pendingData.data?.length || 0;
+                const list = pendingData.data || [];
+                const pendingList = list.filter((d: any) => d.status === 'pending' || d.status === 'assigned');
+                const newCount = pendingList.length;
                 
                 if (newCount > prevPendingCountRef.current && !firstLoadRef.current) {
                     playBell();
