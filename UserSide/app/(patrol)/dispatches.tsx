@@ -205,9 +205,12 @@ export default function PatrolDispatchesScreen() {
                 const allDispatches = data.data || [];
                 await notifyNewAssignedDispatches(allDispatches);
 
-                // Split into pending/assigned (needs acceptance) vs active (already accepted)
                 const pending = allDispatches.filter((d: Dispatch) => d.status === 'pending' || d.status === 'assigned');
-                const active = allDispatches.filter((d: Dispatch) => d.status !== 'pending' && d.status !== 'assigned');
+                const active = allDispatches.filter((d: Dispatch) => 
+                    d.status !== 'pending' && 
+                    d.status !== 'assigned' && 
+                    String(d.patrol_officer_id) === String(userId)
+                );
 
                 setDispatches(prev => {
                     const newIds = pending.map((d: any) => `${d.dispatch_id}-${d.status}-${d.officer_name}`);

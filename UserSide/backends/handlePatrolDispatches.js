@@ -100,7 +100,7 @@ async function getMyDispatches(req, res) {
       LEFT JOIN report_media rm ON r.report_id = rm.report_id
       LEFT JOIN users_public u ON d.patrol_officer_id = u.id
       WHERE d.status NOT IN ('completed', 'cancelled', 'declined')
-        AND (d.station_id = $1 OR $1 = 0)
+        AND d.patrol_officer_id = $1
       GROUP BY
         d.dispatch_id,
         d.report_id,
@@ -131,7 +131,7 @@ async function getMyDispatches(req, res) {
         u.firstname,
         u.lastname
       ORDER BY d.dispatched_at DESC`,
-      [stationId]
+      [userId]
     );
     const formatted = rows.map((row) => {
       const media = parseJsonMaybe(row.media, []);
