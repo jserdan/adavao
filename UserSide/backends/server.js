@@ -964,7 +964,7 @@ app.post('/api/purge-reports-except-18572', async (req, res) => {
     // Delete in order of foreign key dependencies
     const r1 = await client.query('DELETE FROM report_media WHERE report_id != 18572');
     const r2 = await client.query('DELETE FROM patrol_dispatches WHERE report_id != 18572');
-    const r3 = await client.query('DELETE FROM report_timeline WHERE report_id != 18572');
+    const r3 = await client.query('DELETE FROM report_timelines WHERE report_id != 18572');
     const r4 = await client.query('DELETE FROM messages WHERE report_id IS NOT NULL AND report_id != 18572');
     const r5 = await client.query('DELETE FROM reports WHERE report_id != 18572');
     
