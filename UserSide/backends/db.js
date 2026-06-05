@@ -1,6 +1,12 @@
 // db.js
-const { Pool } = require("pg");
+const { Pool, types } = require("pg");
 require("dotenv").config();
+
+// Override parser for TIMESTAMP WITHOUT TIME ZONE (type 1114) to parse as Asia/Manila
+types.setTypeParser(1114, function(stringValue) {
+  const isoString = stringValue.replace(' ', 'T') + '+08:00';
+  return new Date(isoString);
+});
 
 // Optimized connection pool configuration for scalability
 const poolConfig = process.env.DATABASE_URL
@@ -18,7 +24,13 @@ const poolConfig = process.env.DATABASE_URL
     allowExitOnIdle: false,       // Keep pool open for server lifetime
   }
   : {
-    host: process.env.DB_HOST || "127.0.0.1",
+    host: (() => {
+      let host = process.env.DB_HOST || "127.0.0.1";
+      if (host.startsWith("dpg-") && !host.includes(".")) {
+        host = `${host}.singapore-postgres.render.com`;
+      }
+      return host;
+    })(),
     user: process.env.DB_USER || "postgres",
     password: process.env.DB_PASSWORD || "1234",
     database: process.env.DB_DATABASE || "alertdavao",
@@ -39,8 +51,11 @@ pool.on('error', (err) => {
   console.error('🔴 Unexpected database pool error:', err.message);
 });
 
-pool.on('connect', () => {
-  // Silent - don't log every connection
+pool.on('connect', (client) => {
+  // Set session timezone to Asia/Manila to match Laravel backend timestamps
+  client.query("SET timezone = 'Asia/Manila';").catch((err) => {
+    console.error('🔴 Failed to set session timezone to Asia/Manila:', err.message);
+  });
 });
 
 // Wrapper that returns [rows, fields] tuple for consistent interface

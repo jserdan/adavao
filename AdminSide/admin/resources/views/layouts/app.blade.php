@@ -865,9 +865,7 @@
             // Socket.io live update — dispatches a custom event instead of full page reload
             (function initSocketAutoRefresh() {
                 if (typeof io === 'undefined') return;
-
-                const sseUrl = "{{ env('SSE_URL', 'https://userside-node-server.onrender.com/api/stream') }}";
-                const apiUrl = sseUrl.replace('/api/stream', '');
+                const apiUrl = "{{ config('app.node_backend_url', 'https://adavao-1-mawm.onrender.com') }}";
                 
                 let lastDispatch = 0;
                 
