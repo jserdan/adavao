@@ -69,7 +69,7 @@ return [
     |
     */
 
-    'node_backend_url' => env('NODE_BACKEND_URL', 'http://localhost:3000'),
+    'node_backend_url' => env('NODE_BACKEND_URL', 'https://adavao-1-mawm.onrender.com'),
 
     /*
     |--------------------------------------------------------------------------
