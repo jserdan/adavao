@@ -943,65 +943,6 @@ app.post('/api/admin/cache/clear', (req, res) => {
   res.json({ success: true, message: 'Cache cleared' });
 });
 
-// Temporary endpoint to purge database reports leaving only report ID 18572
-app.post('/api/purge-reports-except-18572', async (req, res) => {
-  const providedSecret = req.headers['x-custom-secret'];
-  if (providedSecret !== 'purge-please-123') {
-    return res.status(401).json({ success: false, message: 'Unauthorized' });
-  }
-
-  const { Pool } = require('pg');
-  const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false }
-  });
-
-  let client;
-  try {
-    client = await pool.connect();
-    await client.query('BEGIN');
-    
-    // Delete in order of foreign key dependencies
-    const r1 = await client.query('DELETE FROM report_media WHERE report_id != 18572');
-    const r2 = await client.query('DELETE FROM patrol_dispatches WHERE report_id != 18572');
-    const r3 = await client.query('DELETE FROM report_timelines WHERE report_id != 18572');
-    const r4 = await client.query('DELETE FROM messages WHERE report_id IS NOT NULL AND report_id != 18572');
-    const r5 = await client.query('DELETE FROM reports WHERE report_id != 18572');
-    
-    // Clean up locations
-    const r6 = await client.query(`
-      DELETE FROM locations 
-      WHERE location_id NOT IN (
-        SELECT DISTINCT location_id 
-        FROM reports 
-        WHERE location_id IS NOT NULL
-      )
-    `);
-    
-    await client.query('COMMIT');
-    
-    return res.json({
-      success: true,
-      message: 'Purged successfully, kept report 18572',
-      details: {
-        mediaDeleted: r1.rowCount,
-        dispatchesDeleted: r2.rowCount,
-        timelinesDeleted: r3.rowCount,
-        messagesDeleted: r4.rowCount,
-        reportsDeleted: r5.rowCount,
-        locationsDeleted: r6.rowCount
-      }
-    });
-  } catch (error) {
-    if (client) await client.query('ROLLBACK');
-    console.error('Purge error:', error);
-    return res.status(500).json({ success: false, error: error.message });
-  } finally {
-    if (client) client.release();
-    await pool.end();
-  }
-});
-
 // Catch-all for undefined routes
 app.use('*', (req, res) => {
   res.status(404).json({ error: 'Not found', path: req.originalUrl, method: req.method });
@@ -1022,44 +963,6 @@ const { runMigrations } = require('./runMigrations');
   const server = app.listen(PORT, "0.0.0.0", async () => {
     console.log(`🚀 Server running at http://localhost:${PORT}`);
     // console.log(`   Local Network: http://${require('ip').address()}:${PORT}`);
-
-    // Purge database reports leaving only report ID 18572 on boot
-    console.log("🧹 Running startup database reports purge (keeping only ID 18572)...");
-    try {
-      const { Pool } = require('pg');
-      const pool = new Pool({
-        connectionString: process.env.DATABASE_URL,
-        ssl: { rejectUnauthorized: false }
-      });
-      const client = await pool.connect();
-      try {
-        await client.query('BEGIN');
-        const r1 = await client.query('DELETE FROM report_media WHERE report_id != 18572');
-        const r2 = await client.query('DELETE FROM patrol_dispatches WHERE report_id != 18572');
-        const r3 = await client.query('DELETE FROM report_timelines WHERE report_id != 18572');
-        const r4 = await client.query('DELETE FROM messages WHERE report_id IS NOT NULL AND report_id != 18572');
-        const r5 = await client.query('DELETE FROM reports WHERE report_id != 18572');
-        const r6 = await client.query(`
-          DELETE FROM locations 
-          WHERE location_id NOT IN (
-            SELECT DISTINCT location_id 
-            FROM reports 
-            WHERE location_id IS NOT NULL
-          )
-        `);
-        await client.query('COMMIT');
-        console.log(`✅ Startup database purge completed:`);
-        console.log(`   - Media: ${r1.rowCount}, Dispatches: ${r2.rowCount}, Timelines: ${r3.rowCount}, Messages: ${r4.rowCount}, Reports: ${r5.rowCount}, Locations: ${r6.rowCount}`);
-      } catch (dbErr) {
-        await client.query('ROLLBACK');
-        console.warn("⚠️ Database purge transaction failed:", dbErr.message);
-      } finally {
-        client.release();
-        await pool.end();
-      }
-    } catch (err) {
-      console.warn("⚠️ Failed to run startup database purge:", err.message);
-    }
 
     // Auto-reset verification status on startup (as requested)
     // This ensures all users are set to 'unverified' when the server restarts/redeploys
