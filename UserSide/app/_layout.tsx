@@ -9,6 +9,8 @@ import * as Updates from 'expo-updates';
 import { View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons, FontAwesome } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { BACKEND_URL } from '../config/backend';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
 import LoadingScreen from '../components/LoadingScreen';
@@ -37,6 +39,30 @@ export default function RootLayout() {
         // This ensures the custom animation is visible
         await SplashScreen.hideAsync();
 
+        // Clear session on cold start (exit/swipe away)
+        try {
+          const storedUser = await AsyncStorage.getItem('userData');
+          if (storedUser) {
+            const parsedUser = JSON.parse(storedUser);
+            if (parsedUser?.id || parsedUser?.email) {
+              fetch(`${BACKEND_URL}/logout`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'ngrok-skip-browser-warning': 'true'
+                },
+                body: JSON.stringify({
+                  userId: parsedUser.id,
+                  email: parsedUser.email
+                })
+              }).catch(err => console.warn('Background server logout failed:', err));
+            }
+          }
+        } catch (e) {
+          console.warn('Error reading userData for backend logout:', e);
+        }
+        await AsyncStorage.removeItem('userData');
+
         // Start warming up the server immediately (non-blocking)
         pingServer();
 
@@ -49,18 +75,51 @@ export default function RootLayout() {
 
         // Check for updates if in production build
         if (!__DEV__) {
+          const checkStart = Date.now();
           try {
             setStatusText("Checking for updates...");
-            const update = await Updates.checkForUpdateAsync();
+            
+            // Timeout after 4 seconds for the check
+            const checkTimeout = new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Update check timeout')), 4000)
+            );
+            const update = await Promise.race([
+              Updates.checkForUpdateAsync(),
+              checkTimeout
+            ]) as Updates.UpdateCheckResult;
+
             if (update.isAvailable) {
               setStatusText("Downloading updates...");
-              await Updates.fetchUpdateAsync();
+              
+              // Timeout after 8 seconds for the download
+              const downloadTimeout = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Update download timeout')), 8000)
+              );
+              await Promise.race([
+                Updates.fetchUpdateAsync(),
+                downloadTimeout
+              ]);
+
               setStatusText("Applying updates...");
+              await new Promise(resolve => setTimeout(resolve, 1500));
               await Updates.reloadAsync();
               return; // Reload will restart the app
+            } else {
+              // Ensure we show "Checking for updates..." for at least 5 seconds
+              const elapsed = Date.now() - checkStart;
+              const remaining = 5000 - elapsed;
+              if (remaining > 0) {
+                await new Promise(resolve => setTimeout(resolve, remaining));
+              }
             }
           } catch (updateError) {
-            console.warn('Expo OTA updates check failed:', updateError);
+            console.warn('Expo OTA updates check/download failed or timed out:', updateError.message || updateError);
+            // Fallback: show status for the remainder of the 5 seconds
+            const elapsed = Date.now() - checkStart;
+            const remaining = 5000 - elapsed;
+            if (remaining > 0) {
+              await new Promise(resolve => setTimeout(resolve, remaining));
+            }
           }
         }
 
@@ -159,8 +218,27 @@ function AppContent() {
                 animationDuration: 300,
               }}
             >
-              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              <Stack.Screen name="(patrol)" options={{ headerShown: false }} />
+              <Stack.Screen
+                name="index"
+                options={{
+                  headerShown: false,
+                  animation: 'none',
+                }}
+              />
+              <Stack.Screen
+                name="(tabs)"
+                options={{
+                  headerShown: false,
+                  animation: 'none',
+                }}
+              />
+              <Stack.Screen
+                name="(patrol)"
+                options={{
+                  headerShown: false,
+                  animation: 'none',
+                }}
+              />
               <Stack.Screen
                 name="register"
                 options={{
