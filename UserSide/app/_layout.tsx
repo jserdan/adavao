@@ -5,6 +5,7 @@ import React, { useState, useEffect } from 'react';
 import 'react-native-reanimated';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Font from 'expo-font';
+import * as Updates from 'expo-updates';
 import { View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons, FontAwesome } from '@expo/vector-icons';
@@ -27,6 +28,7 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
   const [isAppReady, setIsAppReady] = useState(false);
   const [showLoadingScreen, setShowLoadingScreen] = useState(true);
+  const [statusText, setStatusText] = useState('Preparing your experience...');
 
   useEffect(() => {
     async function prepare() {
@@ -44,6 +46,25 @@ export default function RootLayout() {
           ...MaterialIcons.font,
           ...FontAwesome.font,
         });
+
+        // Check for updates if in production build
+        if (!__DEV__) {
+          try {
+            setStatusText("Checking for updates...");
+            const update = await Updates.checkForUpdateAsync();
+            if (update.isAvailable) {
+              setStatusText("Downloading updates...");
+              await Updates.fetchUpdateAsync();
+              setStatusText("Applying updates...");
+              await Updates.reloadAsync();
+              return; // Reload will restart the app
+            }
+          } catch (updateError) {
+            console.warn('Expo OTA updates check failed:', updateError);
+          }
+        }
+
+        setStatusText("Preparing your experience...");
 
         // Wait for the AlertDavao animation to complete
         // Animation timing: 1000ms (A letter) + 1500ms (rest letters staggered) = 2500ms
@@ -65,7 +86,7 @@ export default function RootLayout() {
 
   // Show loading screen until app is ready
   if (showLoadingScreen || !isAppReady) {
-    return <LoadingScreen visible={true} />;
+    return <LoadingScreen visible={true} statusText={statusText} />;
   }
 
   return (

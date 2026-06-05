@@ -3,9 +3,10 @@ import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
 
 interface LoadingScreenProps {
   visible: boolean;
+  statusText?: string;
 }
 
-const LoadingScreen: React.FC<LoadingScreenProps> = ({ visible }) => {
+const LoadingScreen: React.FC<LoadingScreenProps> = ({ visible, statusText }) => {
   const letterAnim = useRef(new Animated.Value(0)).current;
   const translateXAnim = useRef(new Animated.Value(-100)).current;
   const rotateAnim = useRef(new Animated.Value(0)).current;
@@ -167,7 +168,7 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({ visible }) => {
       </View>
 
       {/* Loading text with pulsing animation */}
-      <Text style={styles.loadingText}>Preparing your experience...</Text>
+      <Text style={styles.loadingText}>{statusText || "Preparing your experience..."}</Text>
     </View>
   );
 };
