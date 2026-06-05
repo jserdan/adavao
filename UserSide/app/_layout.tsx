@@ -10,9 +10,13 @@ import { View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons, FontAwesome } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as WebBrowser from 'expo-web-browser';
 import { BACKEND_URL } from '../config/backend';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
+
+WebBrowser.maybeCompleteAuthSession();
+
 import LoadingScreen from '../components/LoadingScreen';
 import LoadingOverlay from '../components/LoadingOverlay';
 import GradientBackground from '../components/GradientBackground';
