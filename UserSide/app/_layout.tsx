@@ -67,8 +67,8 @@ export default function RootLayout() {
         }
         await AsyncStorage.removeItem('userData');
 
-        // Start warming up the server immediately (non-blocking)
-        pingServer();
+        // Start warming up the server immediately (non-blocking) - DISABLED
+        // pingServer();
 
         // Preload fonts to prevent FontFaceObserver timeout
         await Font.loadAsync({
@@ -187,12 +187,12 @@ function AppContent() {
     };
     checkAndStartInactivity();
 
-    // Start server warmup to prevent cold start delays
-    startServerWarmup();
+    // Start server warmup to prevent cold start delays - DISABLED
+    // startServerWarmup();
 
     return () => {
       inactivityManager.stop();
-      stopServerWarmup();
+      // stopServerWarmup();
     };
   }, []);
 
