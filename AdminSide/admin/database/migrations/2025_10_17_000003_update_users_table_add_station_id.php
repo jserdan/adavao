@@ -11,8 +11,8 @@ return new class extends Migration
      */
     public function up(): void
     {
-        $table = Schema::hasTable('users_public') ? 'users_public' : 'users';
-        Schema::table($table, function (Blueprint $table) use ($table as $tableName) {
+        $tableName = Schema::hasTable('users_public') ? 'users_public' : 'users';
+        Schema::table($tableName, function (Blueprint $table) use ($tableName) {
             // Check if column doesn't exist before adding
             if (!Schema::hasColumn($tableName, 'station_id')) {
                 $table->unsignedBigInteger('station_id')->nullable()->after('longitude')->comment('Only for police users');
@@ -28,8 +28,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        $table = Schema::hasTable('users_public') ? 'users_public' : 'users';
-        Schema::table($table, function (Blueprint $table) use ($table as $tableName) {
+        $tableName = Schema::hasTable('users_public') ? 'users_public' : 'users';
+        Schema::table($tableName, function (Blueprint $table) use ($tableName) {
             if (Schema::hasColumn($tableName, 'station_id')) {
                 $table->dropForeign(['station_id']);
                 $table->dropColumn('station_id');
