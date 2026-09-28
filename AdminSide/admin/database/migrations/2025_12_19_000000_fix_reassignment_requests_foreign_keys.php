@@ -3,6 +3,7 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Fix report_reassignment_requests foreign keys.
@@ -11,6 +12,11 @@ use Illuminate\Support\Facades\Schema;
  */
 return new class extends Migration
 {
+    /**
+     * PostgreSQL aborts entire transaction on any error — run without transaction.
+     */
+    public $withinTransaction = false;
+
     /**
      * Run the migrations.
      */
@@ -41,38 +47,39 @@ return new class extends Migration
             return;
         }
 
-        // Table exists - try to fix the foreign keys
-        Schema::disableForeignKeyConstraints();
-        
-        Schema::table('report_reassignment_requests', function (Blueprint $table) {
-            // Try to drop existing foreign keys (they may not exist in all setups)
-            try {
-                $table->dropForeign(['requested_by_user_id']);
-            } catch (\Exception $e) {
-                // FK may not exist, continue
-            }
-            
-            try {
-                $table->dropForeign(['reviewed_by_user_id']);
-            } catch (\Exception $e) {
-                // FK may not exist, continue
-            }
-        });
-        
-        Schema::table('report_reassignment_requests', function (Blueprint $table) {
-            // Add correct foreign keys to user_admin table
-            $table->foreign('requested_by_user_id')
-                ->references('id')
-                ->on('user_admin')
-                ->onDelete('cascade');
-                
-            $table->foreign('reviewed_by_user_id')
-                ->references('id')
-                ->on('user_admin')
-                ->onDelete('set null');
-        });
-        
-        Schema::enableForeignKeyConstraints();
+        // Table exists - fix the foreign keys using safe DROP IF EXISTS
+        $tableName = 'report_reassignment_requests';
+
+        // Drop existing FKs safely (IF EXISTS prevents errors)
+        DB::statement("ALTER TABLE \"{$tableName}\" DROP CONSTRAINT IF EXISTS \"{$tableName}_requested_by_user_id_foreign\"");
+        DB::statement("ALTER TABLE \"{$tableName}\" DROP CONSTRAINT IF EXISTS \"{$tableName}_reviewed_by_user_id_foreign\"");
+
+        // Re-add correct foreign keys to user_admin table
+        $fk1Exists = DB::select(
+            "SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = ? AND table_name = ? AND table_schema = 'public'",
+            [$tableName . '_requested_by_user_id_foreign', $tableName]
+        );
+        if (empty($fk1Exists)) {
+            Schema::table($tableName, function (Blueprint $table) {
+                $table->foreign('requested_by_user_id')
+                    ->references('id')
+                    ->on('user_admin')
+                    ->onDelete('cascade');
+            });
+        }
+
+        $fk2Exists = DB::select(
+            "SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = ? AND table_name = ? AND table_schema = 'public'",
+            [$tableName . '_reviewed_by_user_id_foreign', $tableName]
+        );
+        if (empty($fk2Exists)) {
+            Schema::table($tableName, function (Blueprint $table) {
+                $table->foreign('reviewed_by_user_id')
+                    ->references('id')
+                    ->on('user_admin')
+                    ->onDelete('set null');
+            });
+        }
     }
 
     /**
@@ -80,24 +87,9 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::disableForeignKeyConstraints();
-        
-        Schema::table('report_reassignment_requests', function (Blueprint $table) {
-            try {
-                $table->dropForeign(['requested_by_user_id']);
-            } catch (\Exception $e) {
-                // FK may not exist
-            }
-            
-            try {
-                $table->dropForeign(['reviewed_by_user_id']);
-            } catch (\Exception $e) {
-                // FK may not exist
-            }
-        });
-        
+        $tableName = 'report_reassignment_requests';
+        DB::statement("ALTER TABLE \"{$tableName}\" DROP CONSTRAINT IF EXISTS \"{$tableName}_requested_by_user_id_foreign\"");
+        DB::statement("ALTER TABLE \"{$tableName}\" DROP CONSTRAINT IF EXISTS \"{$tableName}_reviewed_by_user_id_foreign\"");
         // Note: We don't restore the old incorrect FKs
-        
-        Schema::enableForeignKeyConstraints();
     }
 };

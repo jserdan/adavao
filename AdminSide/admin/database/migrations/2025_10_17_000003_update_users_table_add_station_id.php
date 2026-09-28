@@ -3,6 +3,7 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 
 return new class extends Migration
 {
@@ -20,13 +21,17 @@ return new class extends Migration
             });
         }
 
-        // Add foreign key separately (try/catch must wrap Schema::table, not the Blueprint call)
-        try {
+        // Add foreign key only if it doesn't already exist
+        // (In PostgreSQL, a failed SQL aborts the entire transaction — try/catch won't help)
+        $fkName = $tableName . '_station_id_foreign';
+        $fkExists = DB::select(
+            "SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = ? AND table_name = ? AND table_schema = 'public'",
+            [$fkName, $tableName]
+        );
+        if (empty($fkExists)) {
             Schema::table($tableName, function (Blueprint $table) {
                 $table->foreign('station_id')->references('station_id')->on('police_stations')->onDelete('set null');
             });
-        } catch (\Exception $e) {
-            // Constraint already exists — safe to ignore
         }
     }
 
