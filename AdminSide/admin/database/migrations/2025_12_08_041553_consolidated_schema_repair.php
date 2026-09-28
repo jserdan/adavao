@@ -21,12 +21,14 @@ return new class extends Migration
                 }
             });
             
-            // Add FK for station_id
-            Schema::table('users_public', function (Blueprint $table) {
-                try {
+            // Add FK for station_id (try/catch must wrap Schema::table, not the Blueprint call)
+            try {
+                Schema::table('users_public', function (Blueprint $table) {
                     $table->foreign('station_id')->references('station_id')->on('police_stations')->onDelete('set null');
-                } catch (\Exception $e) {}
-            });
+                });
+            } catch (\Exception $e) {
+                // Constraint already exists — safe to ignore
+            }
         }
 
         // Helper closure to fix FKs pointing to users_public
@@ -40,15 +42,21 @@ return new class extends Migration
                     \Log::warning("Could not drop constraint on $tableName: " . $e->getMessage());
                 }
 
-                Schema::table($tableName, function (Blueprint $table) use ($columnName, $tableName) {
-                    // 1. Delete orphaned records that would violate the new FK constraint
+                // 1. Delete orphaned records that would violate the new FK constraint
+                try {
                     \DB::statement("DELETE FROM \"$tableName\" WHERE \"$columnName\" NOT IN (SELECT id FROM users_public)");
+                } catch (\Exception $e) {
+                    \Log::warning("Could not clean orphans on $tableName: " . $e->getMessage());
+                }
 
-                    // 2. Add correct foreign key
-                    try {
+                // 2. Add correct foreign key (try/catch must wrap Schema::table)
+                try {
+                    Schema::table($tableName, function (Blueprint $table) use ($columnName) {
                         $table->foreign($columnName)->references('id')->on('users_public')->onDelete('cascade');
-                    } catch (\Exception $e) {}
-                });
+                    });
+                } catch (\Exception $e) {
+                    // Constraint already exists — safe to ignore
+                }
             }
         };
 

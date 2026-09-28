@@ -73,9 +73,6 @@ return new class extends Migration
             }
             if (!Schema::hasColumn('users_public', 'assigned_station_id')) {
                 $table->unsignedBigInteger('assigned_station_id')->nullable()->after('user_role');
-                try {
-                    $table->foreign('assigned_station_id')->references('station_id')->on('police_stations')->onDelete('set null');
-                } catch (\Exception $e) {}
             }
             if (!Schema::hasColumn('users_public', 'is_on_duty')) {
                 $table->boolean('is_on_duty')->default(false)->after('assigned_station_id');
@@ -85,12 +82,25 @@ return new class extends Migration
             }
         });
 
+        // Add FK for assigned_station_id separately (try/catch must wrap Schema::table)
+        try {
+            Schema::table('users_public', function (Blueprint $table) {
+                $table->foreign('assigned_station_id')->references('station_id')->on('police_stations')->onDelete('set null');
+            });
+        } catch (\Exception $e) {
+            // Constraint already exists — safe to ignore
+        }
+
         // Create indexes on users_public
-        Schema::table('users_public', function (Blueprint $table) {
-            $table->index('user_role');
-            $table->index('assigned_station_id');
-            $table->index('is_on_duty');
-        });
+        try {
+            Schema::table('users_public', function (Blueprint $table) {
+                $table->index('user_role');
+                $table->index('assigned_station_id');
+                $table->index('is_on_duty');
+            });
+        } catch (\Exception $e) {
+            // Indexes may already exist — safe to ignore
+        }
     }
 
     /**

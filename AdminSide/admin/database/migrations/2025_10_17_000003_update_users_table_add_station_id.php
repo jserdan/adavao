@@ -12,17 +12,22 @@ return new class extends Migration
     public function up(): void
     {
         $tableName = Schema::hasTable('users_public') ? 'users_public' : 'users';
-        Schema::table($tableName, function (Blueprint $table) use ($tableName) {
-            // Check if column doesn't exist before adding
-            if (!Schema::hasColumn($tableName, 'station_id')) {
+
+        // Add column if it doesn't exist
+        if (!Schema::hasColumn($tableName, 'station_id')) {
+            Schema::table($tableName, function (Blueprint $table) {
                 $table->unsignedBigInteger('station_id')->nullable()->after('longitude')->comment('Only for police users');
-                
-                // Add foreign key if not already present
-                try {
-                    $table->foreign('station_id')->references('station_id')->on('police_stations')->onDelete('set null');
-                } catch (\Exception $e) {}
-            }
-        });
+            });
+        }
+
+        // Add foreign key separately (try/catch must wrap Schema::table, not the Blueprint call)
+        try {
+            Schema::table($tableName, function (Blueprint $table) {
+                $table->foreign('station_id')->references('station_id')->on('police_stations')->onDelete('set null');
+            });
+        } catch (\Exception $e) {
+            // Constraint already exists — safe to ignore
+        }
     }
 
     /**
