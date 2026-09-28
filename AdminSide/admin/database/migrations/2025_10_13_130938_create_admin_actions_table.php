@@ -19,7 +19,7 @@ return new class extends Migration
             $table->datetime('date_performed');
             $table->timestamps();
             
-            $table->foreign('admin_id')->references('id')->on('users')->onDelete('cascade');
+            $table->foreign('admin_id')->references('id')->on('users_public')->onDelete('cascade');
         });
     }
 

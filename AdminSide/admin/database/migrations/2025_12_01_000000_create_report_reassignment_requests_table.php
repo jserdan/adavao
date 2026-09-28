@@ -25,10 +25,10 @@ return new class extends Migration
 
             // Foreign keys
             $table->foreign('report_id')->references('report_id')->on('reports')->onDelete('cascade');
-            $table->foreign('requested_by_user_id')->references('id')->on('users')->onDelete('cascade');
+            $table->foreign('requested_by_user_id')->references('id')->on('users_public')->onDelete('cascade');
             $table->foreign('current_station_id')->references('station_id')->on('police_stations')->onDelete('set null');
             $table->foreign('requested_station_id')->references('station_id')->on('police_stations')->onDelete('cascade');
-            $table->foreign('reviewed_by_user_id')->references('id')->on('users')->onDelete('set null');
+            $table->foreign('reviewed_by_user_id')->references('id')->on('users_public')->onDelete('set null');
         });
     }
 

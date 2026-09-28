@@ -21,8 +21,8 @@ return new class extends Migration
             $table->datetime('sent_at');
             $table->timestamps();
             
-            $table->foreign('sender_id')->references('id')->on('users')->onDelete('cascade');
-            $table->foreign('receiver_id')->references('id')->on('users')->onDelete('cascade');
+            $table->foreign('sender_id')->references('id')->on('users_public')->onDelete('cascade');
+            $table->foreign('receiver_id')->references('id')->on('users_public')->onDelete('cascade');
             $table->foreign('report_id')->references('report_id')->on('reports')->onDelete('set null');
         });
     }

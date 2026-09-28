@@ -11,10 +11,17 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('users', function (Blueprint $table) {
-            $table->integer('failed_login_attempts')->default(0)->after('remember_token');
-            $table->timestamp('lockout_until')->nullable()->after('failed_login_attempts');
-            $table->timestamp('last_failed_login')->nullable()->after('lockout_until');
+        $table = Schema::hasTable('users_public') ? 'users_public' : 'users';
+        Schema::table($table, function (Blueprint $table) use ($table as $tableName) {
+            if (!Schema::hasColumn($tableName, 'failed_login_attempts')) {
+                $table->integer('failed_login_attempts')->default(0)->after('remember_token');
+            }
+            if (!Schema::hasColumn($tableName, 'lockout_until')) {
+                $table->timestamp('lockout_until')->nullable()->after('failed_login_attempts');
+            }
+            if (!Schema::hasColumn($tableName, 'last_failed_login')) {
+                $table->timestamp('last_failed_login')->nullable()->after('lockout_until');
+            }
         });
     }
 
@@ -23,8 +30,14 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('users', function (Blueprint $table) {
-            $table->dropColumn(['failed_login_attempts', 'lockout_until', 'last_failed_login']);
+        $table = Schema::hasTable('users_public') ? 'users_public' : 'users';
+        Schema::table($table, function (Blueprint $table) use ($table as $tableName) {
+            $cols = array_filter(['failed_login_attempts', 'lockout_until', 'last_failed_login'], function($c) use ($tableName) {
+                return Schema::hasColumn($tableName, $c);
+            });
+            if (!empty($cols)) {
+                $table->dropColumn($cols);
+            }
         });
     }
 };

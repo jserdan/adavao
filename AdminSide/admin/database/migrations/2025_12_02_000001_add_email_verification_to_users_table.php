@@ -11,17 +11,18 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('users', function (Blueprint $table) {
-            if (!Schema::hasColumn('users', 'email_verified_at')) {
+        $table = Schema::hasTable('users_public') ? 'users_public' : 'users';
+        Schema::table($table, function (Blueprint $table) use ($table as $tableName) {
+            if (!Schema::hasColumn($tableName, 'email_verified_at')) {
                 $table->timestamp('email_verified_at')->nullable()->after('email');
             }
-            if (!Schema::hasColumn('users', 'verification_token')) {
+            if (!Schema::hasColumn($tableName, 'verification_token')) {
                 $table->string('verification_token', 100)->nullable()->after('email_verified_at');
             }
-            if (!Schema::hasColumn('users', 'token_expires_at')) {
+            if (!Schema::hasColumn($tableName, 'token_expires_at')) {
                 $table->timestamp('token_expires_at')->nullable()->after('verification_token');
             }
-            if (!Schema::hasColumn('users', 'remember_token')) {
+            if (!Schema::hasColumn($tableName, 'remember_token')) {
                 $table->rememberToken();
             }
         });
@@ -32,17 +33,18 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('users', function (Blueprint $table) {
-            if (Schema::hasColumn('users', 'email_verified_at')) {
+        $table = Schema::hasTable('users_public') ? 'users_public' : 'users';
+        Schema::table($table, function (Blueprint $table) use ($table as $tableName) {
+            if (Schema::hasColumn($tableName, 'email_verified_at')) {
                 $table->dropColumn('email_verified_at');
             }
-            if (Schema::hasColumn('users', 'verification_token')) {
+            if (Schema::hasColumn($tableName, 'verification_token')) {
                 $table->dropColumn('verification_token');
             }
-            if (Schema::hasColumn('users', 'token_expires_at')) {
+            if (Schema::hasColumn($tableName, 'token_expires_at')) {
                 $table->dropColumn('token_expires_at');
             }
-            if (Schema::hasColumn('users', 'remember_token')) {
+            if (Schema::hasColumn($tableName, 'remember_token')) {
                 $table->dropColumn('remember_token');
             }
         });

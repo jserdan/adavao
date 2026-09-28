@@ -11,9 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('users', function (Blueprint $table) {
+        $table = Schema::hasTable('users_public') ? 'users_public' : 'users';
+        Schema::table($table, function (Blueprint $table) use ($table as $tableName) {
             // Check if column doesn't exist before adding
-            if (!Schema::hasColumn('users', 'station_id')) {
+            if (!Schema::hasColumn($tableName, 'station_id')) {
                 $table->unsignedBigInteger('station_id')->nullable()->after('longitude')->comment('Only for police users');
                 
                 // Add foreign key
@@ -27,8 +28,9 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('users', function (Blueprint $table) {
-            if (Schema::hasColumn('users', 'station_id')) {
+        $table = Schema::hasTable('users_public') ? 'users_public' : 'users';
+        Schema::table($table, function (Blueprint $table) use ($table as $tableName) {
+            if (Schema::hasColumn($tableName, 'station_id')) {
                 $table->dropForeign(['station_id']);
                 $table->dropColumn('station_id');
             }

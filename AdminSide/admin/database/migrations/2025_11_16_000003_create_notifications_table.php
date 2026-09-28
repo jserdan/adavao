@@ -22,7 +22,7 @@ return new class extends Migration
                 $table->boolean('read')->default(false);
                 $table->timestamps();
                 
-                $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
+                $table->foreign('user_id')->references('id')->on('users_public')->onDelete('cascade');
                 $table->index('user_id');
                 $table->index('read');
                 $table->index('created_at');

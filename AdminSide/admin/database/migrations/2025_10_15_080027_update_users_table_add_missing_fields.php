@@ -11,7 +11,8 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('users', function (Blueprint $table) {
+        $table = Schema::hasTable('users_public') ? 'users_public' : 'users';
+        Schema::table($table, function (Blueprint $table) {
             $table->string('address')->after('password');
             $table->double('latitude')->after('address')->comment('User current or registered latitude');
             $table->double('longitude')->after('latitude')->comment('User current or registered longitude');
@@ -24,7 +25,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('users', function (Blueprint $table) {
+        $table = Schema::hasTable('users_public') ? 'users_public' : 'users';
+        Schema::table($table, function (Blueprint $table) {
             $table->dropColumn(['address', 'latitude', 'longitude', 'is_verified']);
         });
     }

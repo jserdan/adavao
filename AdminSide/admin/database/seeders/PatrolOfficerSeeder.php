@@ -174,6 +174,44 @@ class PatrolOfficerSeeder extends Seeder
             }
         }
 
+        // Seed or update Super Admin (alertdavao.ph@gmail.com)
+        try {
+            $adminEmail = 'alertdavao.ph@gmail.com';
+            $adminPassword = Hash::make('Admin123!');
+            $adminExists = DB::table('user_admin')->where('email', $adminEmail)->exists();
+
+            $adminData = [
+                'firstname' => 'Alert',
+                'lastname' => 'Davao',
+                'contact' => '+639054057984',
+                'updated_at' => now(),
+            ];
+
+            if (Schema::hasColumn('user_admin', 'user_role')) {
+                $adminData['user_role'] = 'super_admin';
+            }
+            if (Schema::hasColumn('user_admin', 'is_verified')) {
+                $adminData['is_verified'] = true;
+            }
+            if (Schema::hasColumn('user_admin', 'email_verified_at')) {
+                $adminData['email_verified_at'] = now();
+            }
+
+            if (!$adminExists) {
+                $adminData['email'] = $adminEmail;
+                $adminData['password'] = $adminPassword;
+                $adminData['created_at'] = now();
+                DB::table('user_admin')->insert($adminData);
+                $this->command->info("Created super admin: {$adminEmail}");
+            } else {
+                DB::table('user_admin')->where('email', $adminEmail)->update($adminData);
+                $this->command->info("Updated super admin: {$adminEmail}");
+            }
+        } catch (\Exception $e) {
+            $this->command->error("Super admin seed error: " . $e->getMessage());
+            Log::error("Super admin seed error: " . $e->getMessage());
+        }
+
         $this->command->info('PatrolOfficerSeeder completed.');
     }
 }

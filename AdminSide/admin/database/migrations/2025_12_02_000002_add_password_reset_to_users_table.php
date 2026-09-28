@@ -11,11 +11,12 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('users', function (Blueprint $table) {
-            if (!Schema::hasColumn('users', 'reset_token')) {
+        $table = Schema::hasTable('users_public') ? 'users_public' : 'users';
+        Schema::table($table, function (Blueprint $table) use ($table as $tableName) {
+            if (!Schema::hasColumn($tableName, 'reset_token')) {
                 $table->string('reset_token', 100)->nullable()->after('token_expires_at');
             }
-            if (!Schema::hasColumn('users', 'reset_token_expires_at')) {
+            if (!Schema::hasColumn($tableName, 'reset_token_expires_at')) {
                 $table->timestamp('reset_token_expires_at')->nullable()->after('reset_token');
             }
         });
@@ -26,11 +27,12 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('users', function (Blueprint $table) {
-            if (Schema::hasColumn('users', 'reset_token')) {
+        $table = Schema::hasTable('users_public') ? 'users_public' : 'users';
+        Schema::table($table, function (Blueprint $table) use ($table as $tableName) {
+            if (Schema::hasColumn($tableName, 'reset_token')) {
                 $table->dropColumn('reset_token');
             }
-            if (Schema::hasColumn('users', 'reset_token_expires_at')) {
+            if (Schema::hasColumn($tableName, 'reset_token_expires_at')) {
                 $table->dropColumn('reset_token_expires_at');
             }
         });

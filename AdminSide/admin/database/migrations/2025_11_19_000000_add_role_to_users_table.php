@@ -11,10 +11,13 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('users', function (Blueprint $table) {
-            // Add role field with default 'user' value
-            $table->string('role')->default('user')->after('is_verified');
-        });
+        $table = Schema::hasTable('users_public') ? 'users_public' : 'users';
+        if (!Schema::hasColumn($table, 'role')) {
+            Schema::table($table, function (Blueprint $table) {
+                // Add role field with default 'user' value
+                $table->string('role')->default('user')->after('is_verified');
+            });
+        }
     }
 
     /**
@@ -22,8 +25,11 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('users', function (Blueprint $table) {
-            $table->dropColumn('role');
-        });
+        $table = Schema::hasTable('users_public') ? 'users_public' : 'users';
+        if (Schema::hasColumn($table, 'role')) {
+            Schema::table($table, function (Blueprint $table) {
+                $table->dropColumn('role');
+            });
+        }
     }
 };

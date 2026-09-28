@@ -11,7 +11,8 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('users', function (Blueprint $table) {
+        $table = Schema::hasTable('users_public') ? 'users_public' : 'users';
+        Schema::table($table, function (Blueprint $table) {
             $table->double('latitude')->nullable()->change();
             $table->double('longitude')->nullable()->change();
         });
@@ -22,7 +23,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('users', function (Blueprint $table) {
+        $table = Schema::hasTable('users_public') ? 'users_public' : 'users';
+        Schema::table($table, function (Blueprint $table) {
             $table->double('latitude')->nullable(false)->change();
             $table->double('longitude')->nullable(false)->change();
         });
