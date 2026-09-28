@@ -17,8 +17,10 @@ return new class extends Migration
             if (!Schema::hasColumn($tableName, 'station_id')) {
                 $table->unsignedBigInteger('station_id')->nullable()->after('longitude')->comment('Only for police users');
                 
-                // Add foreign key
-                $table->foreign('station_id')->references('station_id')->on('police_stations')->onDelete('set null');
+                // Add foreign key if not already present
+                try {
+                    $table->foreign('station_id')->references('station_id')->on('police_stations')->onDelete('set null');
+                } catch (\Exception $e) {}
             }
         });
     }

@@ -73,7 +73,9 @@ return new class extends Migration
             }
             if (!Schema::hasColumn('users_public', 'assigned_station_id')) {
                 $table->unsignedBigInteger('assigned_station_id')->nullable()->after('user_role');
-                $table->foreign('assigned_station_id')->references('station_id')->on('police_stations')->onDelete('set null');
+                try {
+                    $table->foreign('assigned_station_id')->references('station_id')->on('police_stations')->onDelete('set null');
+                } catch (\Exception $e) {}
             }
             if (!Schema::hasColumn('users_public', 'is_on_duty')) {
                 $table->boolean('is_on_duty')->default(false)->after('assigned_station_id');
